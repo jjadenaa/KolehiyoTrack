@@ -1,0 +1,6 @@
+{
+  "name": "KolehiyoTrack",
+  "description": "An interactive UPCAT language proficiency and practice exam platform designed to calibrate and track student performance with comprehensive review options.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

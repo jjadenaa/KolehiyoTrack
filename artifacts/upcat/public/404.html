@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>UPCAT Mock Test</title>
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages
+      // Dynamic base path routing redirect script
+      var l = window.location;
+      var pathname = l.pathname;
+      var segments = pathname.split('/').filter(Boolean);
+
+      var knownRoutes = ['university', 'test', 'results', 'review', 'images'];
+      var basePathSegments = [];
+
+      for (var i = 0; i < segments.length; i++) {
+        if (knownRoutes.indexOf(segments[i]) !== -1) {
+          break;
+        }
+        if (i === segments.length - 1 && segments.length > 1) {
+          basePathSegments = segments.slice(0, 1);
+        } else {
+          basePathSegments.push(segments[i]);
+        }
+      }
+
+      var basePath = '/' + basePathSegments.join('/');
+      if (basePath !== '/' && !basePath.endsWith('/')) {
+        basePath += '/';
+      }
+
+      var routePath = pathname.slice(basePath.length);
+
+      // Convert path to query parameters so index.html can decode it
+      var redirectUrl = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + 
+                        basePath + '?/' + routePath.replace(/&/g, '~and~') + 
+                        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') + 
+                        l.hash;
+
+      l.replace(redirectUrl);
+    </script>
+  </head>
+  <body>
+  </body>
+</html>

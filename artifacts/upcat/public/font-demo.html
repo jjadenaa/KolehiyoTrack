@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Font Comparison</title>
+<style>
+  body { font-family: system-ui, sans-serif; padding: 40px; background: #f5f5f5; }
+  .container { max-width: 900px; margin: 0 auto; }
+  .card { background: white; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  h2 { margin-top: 0; color: #333; }
+  .sans { font-family: ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap; background: #f9fafb; padding: 16px; border-radius: 6px; }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; white-space: pre-wrap; background: #f9fafb; padding: 16px; border-radius: 6px; }
+  .label { font-size: 12px; font-weight: 600; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Font Rendering Comparison for UPCAT Questions</h1>
+  <p style="color:#666;margin-bottom:32px;">This shows how ASCII diagrams, tables, and graphs look in the current sans-serif font vs. a monospace font.</p>
+
+  <!-- TRIANGLE -->
+  <div class="card">
+    <h2>Triangle with Angles</h2>
+    <div class="side-by-side">
+      <div>
+        <div class="label">Current: Sans-serif</div>
+        <div class="sans">      68°
+      / \
+    x/_____\
+      47°</div>
+      </div>
+      <div>
+        <div class="label">Proposed: Monospace</div>
+        <div class="mono">      68°
+      / \
+    x/_____\
+      47°</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT TRIANGLE -->
+  <div class="card">
+    <h2>Right Triangle with Labeled Sides</h2>
+    <div class="side-by-side">
+      <div>
+        <div class="label">Current: Sans-serif</div>
+        <div class="sans">      |
+    a |  \ c
+      |    \
+    __|______
+        b</div>
+      </div>
+      <div>
+        <div class="label">Proposed: Monospace</div>
+        <div class="mono">      |
+    a |  \ c
+      |    \
+    __|______
+        b</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COORDINATE GRAPH -->
+  <div class="card">
+    <h2>Coordinate Graph</h2>
+    <div class="side-by-side">
+      <div>
+        <div class="label">Current: Sans-serif</div>
+        <div class="sans">    y-axis
+    |        • (3,4)
+    |    • (1,2)
+    |
+    +-----------> x-axis</div>
+      </div>
+      <div>
+        <div class="label">Proposed: Monospace</div>
+        <div class="mono">    y-axis
+    |        • (3,4)
+    |    • (1,2)
+    |
+    +-----------> x-axis</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TABLE -->
+  <div class="card">
+    <h2>Data Table</h2>
+    <div class="side-by-side">
+      <div>
+        <div class="label">Current: Sans-serif</div>
+        <div class="sans">| Element | Atomic No. | Mass   |
+|---------|------------|--------|
+| H       | 1          | 1.008  |
+| O       | 8          | 15.999 |
+| Cl      | 17         | 35.45  |</div>
+      </div>
+      <div>
+        <div class="label">Proposed: Monospace</div>
+        <div class="mono">| Element | Atomic No. | Mass   |
+|---------|------------|--------|
+| H       | 1          | 1.008  |
+| O       | 8          | 15.999 |
+| Cl      | 17         | 35.45  |</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NUMBER LINE -->
+  <div class="card">
+    <h2>Number Line</h2>
+    <div class="side-by-side">
+      <div>
+        <div class="label">Current: Sans-serif</div>
+        <div class="sans"><--|-----|-----|----> 0    1    2</div>
+      </div>
+      <div>
+        <div class="label">Proposed: Monospace</div>
+        <div class="mono"><--|-----|-----|----> 0    1    2</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FRACTIONS -->
+  <div class="card">
+    <h2>Fractions / Math Expressions</h2>
+    <div class="side-by-side">
+      <div>
+        <div class="label">Current: Sans-serif</div>
+        <div class="sans">LaTeX: $\frac{1}{2}$ + $\sqrt{4}$ = ?
+Unicode: ½ + √4 = ?
+Inline: 1/2 + √4 = ?</div>
+      </div>
+      <div>
+        <div class="label">Proposed: Monospace</div>
+        <div class="mono">LaTeX: $\frac{1}{2}$ + $\sqrt{4}$ = ?
+Unicode: ½ + √4 = ?
+Inline: 1/2 + √4 = ?</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

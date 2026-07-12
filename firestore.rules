@@ -1,0 +1,14 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Secure rule: Users can only read and write their own sessions and question banks
+    match /user_sessions/{uid}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+    
+    // Default deny for all other paths to secure the database
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
