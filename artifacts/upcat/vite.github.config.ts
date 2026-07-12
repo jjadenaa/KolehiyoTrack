@@ -4,7 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
 export default defineConfig({
-  base: "/jcetrev/",
+  base: "/KolehiyoTrack/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
