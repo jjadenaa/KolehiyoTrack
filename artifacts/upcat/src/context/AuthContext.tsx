@@ -84,8 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       keysToClear.forEach((key) => localStorage.removeItem(key));
       
-      // Force page reload to ensure all state is completely clean and reset
-      window.location.reload();
+      // Redirect to the base URL of the app to reset state and prevent 404 errors on nested pages under static hosting
+      window.location.href = import.meta.env.BASE_URL || "/";
     } catch (error: any) {
       console.error("Sign-out error:", error);
       toast({
