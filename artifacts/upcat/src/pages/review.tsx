@@ -47,7 +47,7 @@ export default function ReviewPage() {
       <div className="flex-1 flex items-center justify-center p-4 text-center">
         <div className="space-y-4">
           <h2 className="text-2xl font-bold">Session not found</h2>
-          <Button asChild variant="outline"><Link href="/">Back to Dashboard</Link></Button>
+          <Button asChild variant="outline"><Link href={`/university/${universityId || "upcat"}`}>Back to Dashboard</Link></Button>
         </div>
       </div>
     </Layout>
@@ -73,7 +73,7 @@ export default function ReviewPage() {
         {/* Header */}
         <div className="flex items-center gap-4 border-b pb-6">
           <Button variant="ghost" size="icon" asChild className="rounded-full shrink-0">
-            <Link href="/"><ArrowLeft className="h-5 w-5" /></Link>
+            <Link href={`/university/${universityId || "upcat"}`}><ArrowLeft className="h-5 w-5" /></Link>
           </Button>
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-bold">Review Answers</h1>
@@ -217,7 +217,7 @@ export default function ReviewPage() {
 
         <div className="pt-4 text-center">
           <Button asChild variant="outline">
-            <Link href="/">← Back to Dashboard</Link>
+            <Link href={`/university/${universityId || "upcat"}`}>← Back to Dashboard</Link>
           </Button>
         </div>
       </div>
