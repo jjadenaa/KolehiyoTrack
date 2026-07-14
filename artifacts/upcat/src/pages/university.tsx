@@ -736,6 +736,7 @@ function PromptGeneratorPanel({
         parts.push("[UPCAT READING COMPREHENSION CALIBRATION]");
         parts.push(`- Language: ${lang}.`);
         parts.push(`- Create ${passageCountMin} to ${passageCountMax} distinct passages.`);
+        parts.push("Creat new passages and question every prompt you may never reuse any passages from previous sets. Use new topics, data, and sources every time");
         parts.push("- Passage types MUST be varied across the set. Use any of these: research paper excerpt, advertisement, essay, poem, short story excerpt, instruction manual, song lyrics, scientific article, historical document, newspaper editorial, persuasive speech, biography excerpt, interview transcript, or academic journal abstract.");
         parts.push("- Each passage must be substantial enough for 2-5 comprehension questions.");
         parts.push("  • Poems: 3-4 stanzas with a clear theme. Syllable counts for poems must be precisely calculated based on standard pronunciation rules without errors.");
@@ -753,13 +754,13 @@ function PromptGeneratorPanel({
         parts.push("  • Interview transcripts: 3-5 questions and answers with a clear topic.");
         parts.push("  • Academic journal abstracts: 1-2 paragraphs with a clear research question and methodology.");
         parts.push("You may freely get passages from the internet. Including the source.");
-        parts.push("- If a passage involves data or a figure, represent it using ASCII art or a table directly in the text — never an image.");
+        parts.push("- If a passage involves data or a figure, represent it using ASCII art or a table directly in the text.");
         parts.push("CRITICAL CHOICE-DESIGN AND DISTINCTION RULES: • Tone Balance: Avoid an obvious '1 positive and 3 negative' structure that gives the answer away without reading. Balance the tone by using 2 negative and 2 positive options, or make all options share a similar tone (all positive or all negative) to ensure genuine text analysis.");
         parts.push("• Context Clues & Anchors: The correct answer option must explicitly incorporate context clues, such as exact words or specific phrases directly from the passage, to tightly anchor it to the text.");
         parts.push("• Distinct Logic Lines: Ensure all choices have clear distinctions and are far apart in their logic lines. Distractors (wrong answers) must be incorrect for distinct, clear-cut reasons (e.g., contradicting a fact, introducing unmentioned information, or reversing a cause-and-effect relationship).");
         parts.push("• No Ambiguity: Options must be structurally distinct to prevent overlapping cases, gray areas, or multiple potentially correct answers. There must be only one ironclad, logically undeniable correct answer.");
         parts.push("- Each passage must have 2 to 5 comprehension questions.");
-        parts.push("CRITICAL QUESTION ORDER AND COUNT: Total questions across all passages must equal exactly 40. Do NOT randomize or shuffle the order of questions across different passages. Keep all questions for Passage 1 together, then all questions for Passage 2, etc., following the exact, correct row-by-row sequence of any text or table presented.");
+        parts.push("Do NOT randomize or shuffle the order of questions across different passages. Keep all questions for Passage 1 together, then all questions for Passage 2, etc., following the exact, correct row-by-row sequence of any text or table presented.");
         parts.push("- Total questions across all passages must equal exactly " + count + ".");
         parts.push("- CRITICAL: Do NOT randomize the order of questions within a passage. Keep all questions for passage 1 together, then all questions for passage 2, etc. Ensure that all options (A, B, C, D) are completely written out and fully visible without getting cut off at the bottom.");
         parts.push("");
