@@ -63,11 +63,37 @@ function buildSegments(text: string): Segment[] {
 }
 
 /**
+ * Helper to determine if a string looks like a valid inline math formula,
+ * as opposed to regular text containing currency or punctuation.
+ */
+function isValidMath(math: string): boolean {
+  // If it has newlines, it's not inline math
+  if (math.includes('\n')) return false;
+
+  // If it is just a pure number (possibly with decimals/commas), it's not math that needs KaTeX
+  if (/^\s*\d+([.,]\d+)?\s*$/.test(math)) return false;
+
+  // If it contains common English words, it's probably text/passage content rather than a formula
+  const words = math.toLowerCase().split(/\s+/);
+  const commonWords = [
+    'the', 'and', 'with', 'to', 'buy', 'for', 'was', 'she', 'had', 'been', 
+    'you', 'your', 'this', 'that', 'of', 'is', 'in', 'it', 'on', 'he', 
+    'his', 'her', 'they', 'at', 'be', 'or', 'an', 'but', 'my', 'she', 'him',
+    'only', 'from', 'about', 'would', 'should', 'could', 'which', 'who', 'whom',
+    'tomorrow', 'present', 'cents', 'dollars', 'money', 'price', 'cost'
+  ];
+  const hasCommonWords = words.some(w => commonWords.includes(w));
+  if (hasCommonWords) return false;
+
+  return true;
+}
+
+/**
  * Renders text with **bold** markers as <strong> elements, and math inside $...$ or $$...$$ using KaTeX.
  */
 function RichText({ text }: { text: string }) {
-  // First, parse out math
-  const parts = text.split(/(\$\$[\s\S]*?\$\$|\$[\s\S]*?\$)/g);
+  // Parse out math with a precise regular expression matching double dollars or single dollars.
+  const parts = text.split(/(\$\$[\s\S]*?\$\$|\$[^\s$](?:[^\$\n]*?[^\s$])?\$)/g);
   return (
     <>
       {parts.map((part, i) => {
@@ -77,10 +103,12 @@ function RichText({ text }: { text: string }) {
         }
         if (part.startsWith('$') && part.endsWith('$')) {
           const math = part.slice(1, -1);
-          return <MathElement key={i} math={math} displayMode={false} />;
+          if (isValidMath(math)) {
+            return <MathElement key={i} math={math} displayMode={false} />;
+          }
         }
         
-        // Bold parsing for the non-math text
+        // Bold parsing for non-math or fallback text
         const boldParts = part.split(/(\*\*[\s\S]*?\*\*)/g);
         return (
           <span key={i}>

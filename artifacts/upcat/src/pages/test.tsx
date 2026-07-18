@@ -103,10 +103,11 @@ function buildPages(questions: any[]): TestPage[] {
 export default function TestPage() {
   const [, setLocation] = useLocation();
   const { user } = useAuth();
-  const { universityId, questions, answers, setAnswers, timeRemaining, setTimeRemaining, status, setStatus, setLastSession } = useTest();
+  const { universityId, questions, answers, setAnswers, timeRemaining, setTimeRemaining, status, setStatus, setLastSession, resetTest } = useTest();
 
   const [currentPage, setCurrentPage] = useState(0);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [initialTime] = useState(timeRemaining);
   const [submitting, setSubmitting] = useState(false);
 
@@ -187,6 +188,11 @@ export default function TestPage() {
     setLocation("/results");
   };
 
+  const handleExit = () => {
+    resetTest();
+    setLocation(`/university/${universityId}`);
+  };
+
   if (questions.length === 0) return null;
   const page = pages[currentPage];
   const q = page.question;
@@ -196,10 +202,23 @@ export default function TestPage() {
   return (
     <div className="min-h-[100dvh] flex flex-col bg-background">
       <header className="border-b p-4 flex justify-between items-center sticky top-0 bg-background z-10">
-        <div className="font-bold text-lg">KolehiyoTrack Mock Test</div>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="text-muted-foreground hover:text-foreground hover:bg-muted"
+            onClick={() => setShowExitConfirm(true)}
+          >
+            <XCircle className="h-4 w-4 mr-1.5 text-destructive" />
+            <span className="font-semibold">Exit Test</span>
+          </Button>
+          <div className="h-4 w-[1px] bg-border hidden sm:block"></div>
+          <div className="font-bold text-lg hidden sm:block">KolehiyoTrack Mock Test</div>
+          <div className="font-bold text-base sm:hidden">Mock Test</div>
+        </div>
         <div className="flex items-center gap-4">
-          <span className="text-sm text-muted-foreground">{answeredCount}/{questions.length} answered</span>
-          <span className={cn("font-mono text-lg font-bold", timeRemaining < 60 && "text-red-500 animate-pulse")}>
+          <span className="text-xs sm:text-sm text-muted-foreground">{answeredCount}/{questions.length} answered</span>
+          <span className={cn("font-mono text-base sm:text-lg font-bold", timeRemaining < 60 && "text-red-500 animate-pulse")}>
             {formatTime(timeRemaining)}
           </span>
           <Button onClick={() => setShowSubmitConfirm(true)} disabled={submitting}>Submit</Button>
@@ -336,6 +355,19 @@ export default function TestPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleManualSubmit}>Confirm</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showExitConfirm} onOpenChange={setShowExitConfirm}>
+        <AlertDialogContent>
+          <AlertDialogTitle>Are you sure you want to exit?</AlertDialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Your progress in this mock test will not be saved. Any answered questions will be lost.
+          </p>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleExit} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">Exit</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

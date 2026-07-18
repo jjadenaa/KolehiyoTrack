@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { LogIn, LogOut, Sun, Moon, Menu, Plus, Home, Book, X, History } from "lucide-react";
+import { LogIn, LogOut, Sun, Moon, Menu, Plus, Home, Book, X, History, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CURRENT_VERSION, CHANGELOG_DATA } from "../config/changelog";
 
@@ -207,6 +207,36 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
               </Button>
             )}
             <div className="ml-auto flex items-center space-x-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 rounded-full sm:hidden"
+                asChild
+                title="Submit Feedback"
+              >
+                <a 
+                  href="https://docs.google.com/forms/d/e/1FAIpQLSeoetYxHNgRQxyJX0k4H5UpI0B3NXE6YHbNgk6fhOP3jH23wg/viewform?usp=header"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <MessageSquare className="h-4 w-4 text-primary" />
+                </a>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:flex items-center gap-2 h-9 px-4 rounded-full text-xs font-semibold shadow-sm hover:bg-muted/50"
+                asChild
+              >
+                <a 
+                  href="https://docs.google.com/forms/d/e/1FAIpQLSeoetYxHNgRQxyJX0k4H5UpI0B3NXE6YHbNgk6fhOP3jH23wg/viewform?usp=header"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                  Feedback / Report Bug
+                </a>
+              </Button>
               <Button
                 variant="ghost"
                 size="icon"
