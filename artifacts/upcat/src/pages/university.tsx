@@ -7,6 +7,7 @@ import { Session } from "@/types/session";
 import { useTest } from "@/context/TestContext";
 import { SUBJECT_LABELS, formatTime, calcTotalSeconds, SECONDS_PER_ITEM } from "@/lib/format";
 import { Layout } from "@/components/layout";
+import { DailyMissionsTracker } from "@/components/DailyMissionsTracker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -19,7 +20,7 @@ import {
   ArrowRight, History, PlayCircle, BookOpen, ChevronDown, ChevronUp,
   CheckCircle, XCircle, Clock, RotateCcw, Upload, Trash2, RefreshCw,
   AlertTriangle, Copy, FileText, Sparkles, Wand2, Calculator, Cloud, CloudOff,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Gauge
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -97,220 +98,164 @@ function UpcatCountdown() {
   );
 }
 
-// ─── UPG Calculator ───────────────────────────────────────────────────────────
+// ─── Exam Preparedness ────────────────────────────────────────────────────────
 
-function UpgCalculator() {
-  const [lang, setLang] = useState(0);
-  const [math, setMath] = useState(0);
-  const [science, setScience] = useState(0);
-  const [reading, setReading] = useState(0);
-  const [hswa, setHswa] = useState(90);
-  const [palugit, setPalugit] = useState(0);
-  const [pabigat, setPabigat] = useState(0);
-  const [showFormula, setShowFormula] = useState(false);
-
-  const upcatAvg = useMemo(() => {
-    if (lang + math + science + reading === 0) return 0;
-    return (lang + math + science + reading) / 4;
-  }, [lang, math, science, reading]);
-
-  const estimatedUPG = useMemo(() => {
-    // UPCAT component: 60% weight, normalized to 1.0-5.0 scale
-    // A raw score of 0 = UPG 5.0, raw score of 100 = UPG 1.0
-    const upcatScore = upcatAvg;
-    const upcatComponent = 5.0 - (upcatScore / 100) * 4.0;
-
-    // HSWA component: 40% weight, normalized to 1.0-5.0 scale
-    // HSWA of 60 = UPG 5.0, HSWA of 100 = UPG 1.0
-    const hswaComponent = 5.0 - ((hswa - 60) / 40) * 4.0;
-
-    const rawUPG = (upcatComponent * 0.60) + (hswaComponent * 0.40);
-
-    // Apply modifiers
-    const adjusted = rawUPG - palugit + pabigat;
-
-    return Math.max(1.0, Math.min(5.0, adjusted));
-  }, [upcatAvg, hswa, palugit, pabigat]);
-
-  const getUPGCategory = (upg: number) => {
-    if (upg <= 1.5) return "Excellent";
-    if (upg <= 2.0) return "Very Good";
-    if (upg <= 2.5) return "Good";
-    if (upg <= 3.0) return "Fair";
-    return "Needs Improvement";
-  };
-
-  const getCategoryColor = (upg: number) => {
-    if (upg <= 1.5) return "text-emerald-600";
-    if (upg <= 2.0) return "text-blue-600";
-    if (upg <= 2.5) return "text-yellow-600";
-    if (upg <= 3.0) return "text-orange-600";
-    return "text-red-600";
-  };
+function ExamPreparedness({ sessions }: { sessions: Session[] }) {
+  const { user, signInWithGoogle, loading: authLoading } = useAuth();
+  
+  let percentage = 0;
+  if (sessions && sessions.length > 0) {
+     const recent = sessions.slice(0, 5);
+     const totalQuestions = recent.reduce((sum, s) => sum + s.totalQuestions, 0);
+     const totalScore = recent.reduce((sum, s) => sum + s.totalScore, 0);
+     percentage = totalQuestions > 0 ? (totalScore / totalQuestions) * 100 : 0;
+  }
+  
+  let color = "text-red-500";
+  let stroke = "stroke-red-500";
+  let motivation = "Keep practicing! Focus on your weakest subjects to boost your score.";
+  
+  if (percentage >= 80) {
+    color = "text-emerald-500";
+    stroke = "stroke-emerald-500";
+    motivation = "Excellent! You're highly prepared. Keep maintaining this level.";
+  } else if (percentage >= 60) {
+    color = "text-yellow-500";
+    stroke = "stroke-yellow-500";
+    motivation = "Good progress! A little more study in specific areas will make you fully prepared.";
+  } else if (percentage >= 40) {
+    color = "text-orange-500";
+    stroke = "stroke-orange-500";
+    motivation = "You're getting there! Review the concepts you often miss to improve steadily.";
+  }
+  
+  if (!authLoading && !user) {
+    return (
+      <Card className="shadow-sm relative overflow-hidden group">
+        <CardHeader className="pb-3 bg-muted/20 dark:bg-muted/10 border-b">
+          <div className="flex items-center gap-2">
+            <Gauge className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <CardTitle className="text-md font-bold">Exam Preparedness</CardTitle>
+              <CardDescription className="text-xs">See how prepared you are based on mock tests</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-4">
+          <div className="relative blur-[6px] opacity-60 pointer-events-none select-none filter transition-all duration-300">
+             <div className="flex justify-center py-4">
+                <div className="relative w-48 h-24 overflow-hidden mb-2">
+                   <div className="absolute top-4 left-1/2 -translate-x-1/2 w-40 h-20 rounded-t-full border-[16px] border-muted border-b-0" />
+                </div>
+             </div>
+             <div className="text-center text-3xl font-bold pb-8">--%</div>
+          </div>
+          
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/20 backdrop-blur-[2px] p-6 text-center z-10">
+            <div className="bg-card p-5 rounded-xl shadow-lg border w-full max-w-xs flex flex-col items-center space-y-3">
+               <Gauge className="h-8 w-8 text-primary opacity-80" />
+               <p className="text-sm font-medium">Sign in to unlock personalized exam preparedness insights</p>
+               <Button
+                onClick={async () => {
+                  try {
+                    await signInWithGoogle();
+                  } catch(e) {
+                    console.error(e);
+                  }
+                }}
+                className="w-full gap-2 font-semibold bg-primary hover:bg-primary/90 text-primary-foreground mt-2"
+              >
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                Sign in with Google
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+  
+  if (!sessions || sessions.length === 0) {
+     return (
+      <Card className="shadow-sm">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Gauge className="h-5 w-5 text-muted-foreground" />
+            <CardTitle className="text-lg">Exam Preparedness</CardTitle>
+          </div>
+          <CardDescription>
+            See how prepared you are based on your past mock tests.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-center py-8">
+           <div className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center mx-auto mb-3">
+             <Gauge className="h-6 w-6 text-muted-foreground/50" />
+           </div>
+           <p className="text-sm text-muted-foreground">
+             Take your first mock test to see your preparedness level.
+           </p>
+        </CardContent>
+      </Card>
+     );
+  }
+  
+  const radius = 64;
+  const circumference = Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
 
   return (
     <Card className="shadow-sm">
       <CardHeader>
         <div className="flex items-center gap-2">
-          <Calculator className="h-5 w-5 text-muted-foreground" />
-          <CardTitle className="text-lg">UPG Calculator</CardTitle>
+          <Gauge className="h-5 w-5 text-muted-foreground" />
+          <CardTitle className="text-lg">Exam Preparedness</CardTitle>
         </div>
         <CardDescription>
-          Estimate your University Predicted Grade.
+          Based on your last {Math.min(5, sessions.length)} mock test{Math.min(5, sessions.length) !== 1 ? 's' : ''}.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
-        {/* UPCAT Subtest Scores */}
-        <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">
-            UPCAT Subtest Scores (0-100)
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Language Proficiency</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={lang || ""}
-                onChange={(e) => setLang(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-                className="h-9"
-                placeholder="0"
+      <CardContent className="space-y-6 pb-8">
+        <div className="flex flex-col items-center">
+          <div className="relative w-48 h-24 overflow-hidden mb-2">
+            <svg viewBox="0 0 160 80" className="w-full h-full">
+              <path
+                d="M 16 70 A 64 64 0 0 1 144 70"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="12"
+                strokeLinecap="round"
+                className="text-muted/30"
               />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Mathematics</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={math || ""}
-                onChange={(e) => setMath(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-                className="h-9"
-                placeholder="0"
+              <path
+                d="M 16 70 A 64 64 0 0 1 144 70"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="12"
+                strokeLinecap="round"
+                className={stroke}
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                style={{ transition: "stroke-dashoffset 1s ease-in-out" }}
               />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Science</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={science || ""}
-                onChange={(e) => setScience(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-                className="h-9"
-                placeholder="0"
-              />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Reading Comprehension</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                value={reading || ""}
-                onChange={(e) => setReading(Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-                className="h-9"
-                placeholder="0"
-              />
-            </div>
-          </div>
-          {upcatAvg > 0 && (
-            <div className="text-xs text-muted-foreground">
-              Average: {upcatAvg.toFixed(1)} / 100
-            </div>
-          )}
-        </div>
-
-        <Separator />
-
-        {/* High School Grades */}
-        <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">
-            High School Weighted Average
-          </div>
-          <div className="space-y-1">
-            <Label className="text-xs">HSWA (Grades 9-11)</Label>
-            <Input
-              type="number"
-              min={60}
-              max={100}
-              step={0.1}
-              value={hswa}
-              onChange={(e) => setHswa(Math.min(100, Math.max(60, Number(e.target.value) || 90)))}
-              className="h-9"
-            />
-          </div>
-        </div>
-
-        <Separator />
-
-        {/* Modifiers */}
-        <div className="space-y-3">
-          <div className="text-sm font-medium text-muted-foreground">
-            Adjustments (optional)
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Palugit (bonus)</Label>
-              <Input
-                type="number"
-                min={0}
-                max={2}
-                step={0.01}
-                value={palugit}
-                onChange={(e) => setPalugit(Math.min(2, Math.max(0, Number(e.target.value) || 0)))}
-                className="h-9"
-              />
-              <span className="text-[10px] text-muted-foreground">
-                e.g. +0.5 for public school
-              </span>
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Pabigat (penalty)</Label>
-              <Input
-                type="number"
-                min={0}
-                max={2}
-                step={0.01}
-                value={pabigat}
-                onChange={(e) => setPabigat(Math.min(2, Math.max(0, Number(e.target.value) || 0)))}
-                className="h-9"
-              />
-              <span className="text-[10px] text-muted-foreground">
-                e.g. -0.05 for out-of-region 2nd choice
+            </svg>
+            <div className="absolute bottom-0 left-0 right-0 flex flex-col items-center">
+              <span className={`text-3xl font-extrabold ${color}`}>
+                {percentage.toFixed(0)}%
               </span>
             </div>
           </div>
-        </div>
-
-        <Separator />
-
-        {/* Result */}
-        <div className="text-center space-y-2 py-2">
-          <div className="text-sm text-muted-foreground">Estimated UPG</div>
-          <div className="text-5xl font-bold tabular-nums text-foreground">
-            {estimatedUPG.toFixed(3)}
-          </div>
-          <div className={`text-sm font-medium ${getCategoryColor(estimatedUPG)}`}>
-            {getUPGCategory(estimatedUPG)} — Lower is better
-          </div>
-        </div>
-
-        <div className="text-xs text-muted-foreground bg-muted rounded-md p-3 space-y-1">
-          <p>
-            <strong>Formula:</strong> UPG = (UPCAT × 0.60) + (HSWA × 0.40)
-          </p>
-          <p>
-            <strong>Basis:</strong> UPCAT = 60%, HSWA = 40%. Lower UPG = better.
-          </p>
-          <p>
-            <strong>Tip:</strong> Skipping questions you don&apos;t know is better than guessing (0.25 penalty per wrong answer).
+          <p className="text-sm text-center font-medium px-2 mt-4">
+             {motivation}
           </p>
         </div>
       </CardContent>
     </Card>
-  );
+  )
 }
 
 // ─── Topic definitions ────────────────────────────────────────────────────────
@@ -1190,7 +1135,7 @@ function PromptGeneratorPanel({
                 Upload Questions to Bank
               </h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Configure your test, generate a prompt for Gemini, then paste the questions back.
+                Configure your test, generate a prompt for Gemini or Deepseek, then paste the questions back.
               </p>
             </div>
             <button
@@ -1290,7 +1235,7 @@ function PromptGeneratorPanel({
               {generatedPrompt && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Prompt for Gemini</span>
+                    <span className="text-sm font-medium">Prompt for AI chatbot</span>
                     <Button size="sm" variant="outline" onClick={copyPrompt} className="gap-1 h-7 text-xs">
                       <Copy className="h-3 w-3" />
                       {copied ? "Copied!" : "Copy"}
@@ -1302,7 +1247,7 @@ function PromptGeneratorPanel({
                     onChange={(e) => setCustomPrompt(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">
-                    1. Edit the prompt above if needed → 2. Click Copy → 3. Go to <strong>gemini.google.com</strong> → 4. Paste it → 5. Copy the questions it returns → 6. Switch to "Paste Questions" tab
+                    1. Edit the prompt above if needed → 2. Click Copy → 3. Go to <strong>gemini.google.com or chat.deepseek.com/</strong> → 4. Paste it → 5. Copy the questions it returns → 6. Switch to "Paste Questions" tab
                   </p>
                 </div>
               )}
@@ -1322,7 +1267,7 @@ function PromptGeneratorPanel({
               </div>
 
               <div className="space-y-1">
-                <Label htmlFor="paste-json" className="text-sm font-medium">Paste questions from Gemini (JSON or text format)</Label>
+                <Label htmlFor="paste-json" className="text-sm font-medium">Paste questions from AI chatbot (JSON or text format)</Label>
                 <textarea
                   id="paste-json"
                   className="w-full min-h-[140px] rounded-md border bg-background px-3 py-2 text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-ring"
@@ -1392,6 +1337,14 @@ function PaginatedSessions({
           const pct = Math.round((correct / session.totalQuestions) * 100);
           const score = universityId === "upcat" ? Math.max(0, correct - 0.25 * wrong) : correct;
           const sessionNum = sessions.length - start - idx; // newest = highest number, oldest = #1
+          const uniqueSubjects = Array.from(new Set((session.answers || []).map((a: any) => a.subject).filter(Boolean)));
+          const subjectsLabel = uniqueSubjects.length === 0
+            ? "General Test"
+            : uniqueSubjects.length === 1
+              ? (SUBJECT_LABELS[uniqueSubjects[0] as string] || uniqueSubjects[0])
+              : uniqueSubjects.length <= 2
+                ? uniqueSubjects.map((s: any) => SUBJECT_LABELS[s] || s).join(", ")
+                : `Mixed (${uniqueSubjects.length} subjects)`;
           return (
             <div
               key={session.id}
@@ -1403,6 +1356,9 @@ function PaginatedSessions({
                     <span className="text-muted-foreground font-normal">#{sessionNum}</span>
                     <span className="text-primary">{score.toFixed(2)}</span>
                     <span className="text-muted-foreground font-normal text-xs">/ {session.totalQuestions}</span>
+                  </div>
+                  <div className="text-[11px] font-medium text-muted-foreground bg-muted/60 dark:bg-muted/30 border border-border/60 rounded px-1.5 py-0.5 inline-block my-0.5 max-w-full truncate">
+                    {subjectsLabel}
                   </div>
                   <div className="text-xs text-muted-foreground">
                     {new Date(session.createdAt).toLocaleDateString("en-PH", {
@@ -1697,7 +1653,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                 </CardTitle>
                 <CardDescription className="mt-1">
                   {bankStats.total === 0
-                    ? "No questions uploaded yet. Upload questions from Gemini to get started."
+                    ? "No questions uploaded yet. Upload questions from AI chatbots (Gemini/Deepseek) to get started."
                     : `${bankStats.total} questions total · ${bankStats.unused} unused`}
                 </CardDescription>
               </div>
@@ -1794,9 +1750,9 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* ── Config card ── */}
-          <div className="lg:col-span-2">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* ── Config card & Past Sessions ── */}
+          <div className="lg:col-span-7 space-y-6">
             <Card className="border-2 shadow-sm">
               <CardHeader>
                 <CardTitle>Configure Mock Test</CardTitle>
@@ -1906,11 +1862,6 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                 </Button>
               </CardFooter>
             </Card>
-          </div>
-
-          {/* ── Past sessions sidebar ── */}
-          <div className="space-y-6">
-            {params.id === "upcat" && <UpgCalculator />}
 
             <Card className="shadow-sm">
               <CardHeader className="pb-2">
@@ -1946,6 +1897,12 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                 )}
               </CardContent>
             </Card>
+          </div>
+
+          {/* ── Sidebar (Admissions & Missions) ── */}
+          <div className="lg:col-span-5 space-y-6">
+            <ExamPreparedness sessions={pastSessions} />
+            <DailyMissionsTracker sessions={pastSessions} universityId={params.id} />
           </div>
         </div>
       </div>

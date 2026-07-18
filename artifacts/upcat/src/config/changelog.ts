@@ -9,10 +9,20 @@ export interface ChangelogItem {
 }
 
 // 1. Change your global version number here
-export const CURRENT_VERSION = "v0.0.2 Beta";
+export const CURRENT_VERSION = "v0.1.0 Beta";
 
 // 2. Add or update release notes here (newest first)
 export const CHANGELOG_DATA: ChangelogItem[] = [
+  {
+    version: "v0.1.0",
+    date: "July 17, 2026",
+    changes: [
+      {
+        title: "Missions, Targets, Application Timeline, Bug fixes + More",
+        description: "Added daily missions that resets every midnight, added specific goals to achieve, get updated when universities open their applications, improved UI, and fixed major bugs. "
+      }
+    ]
+  },
   {
     version: "v0.0.2",
     date: "July 13, 2026",

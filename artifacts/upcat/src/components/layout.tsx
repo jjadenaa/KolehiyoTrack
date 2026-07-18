@@ -51,8 +51,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
           )}
           <aside
             className={cn(
-              "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transition-transform duration-300 ease-in-out flex flex-col",
-              "md:relative md:translate-x-0",
+              "fixed inset-y-0 left-0 z-50 w-64 bg-card border-r transition-transform duration-300 ease-in-out flex flex-col md:translate-x-0",
               sidebarOpen ? "translate-x-0" : "-translate-x-full"
             )}
           >
@@ -110,7 +109,22 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
             </div>
 
             {/* Sidebar Footer with Changelog and Version */}
-            <div className="p-4 border-t bg-card/50 flex items-center justify-between mt-auto shrink-0">
+            <div className="p-4 border-t bg-card/50 flex flex-col gap-2.5 mt-auto shrink-0">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/85 px-1 block">
+                Visit our social media pages
+              </span>
+              <a 
+                href="https://www.tiktok.com/@kolehiyotrack" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-muted text-xs text-muted-foreground hover:text-foreground transition-all border border-transparent hover:border-border/40"
+              >
+                <svg className="w-3.5 h-3.5 shrink-0 fill-current text-foreground" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.01 1.62 4.14.99 1.13 2.37 1.84 3.86 2.03v3.83a8.87 8.87 0 0 1-5.11-1.84v6.86a7.28 7.28 0 0 1-2.13 5.16 7.28 7.28 0 0 1-5.16 2.13 7.28 7.28 0 0 1-5.16-2.13A7.28 7.28 0 0 1 2.35 13a7.28 7.28 0 0 1 2.13-5.16A7.28 7.28 0 0 1 9.64 5.7c.07.13.14.26.22.4.67 1.15 1.66 2.06 2.87 2.64V.02zm0 0"/>
+                </svg>
+                <span className="font-semibold">@kolehiyotrack</span>
+              </a>
+              <div className="flex items-center justify-between">
               <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
                 <DialogTrigger asChild>
                   <Button 
@@ -172,13 +186,14 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
               <div className="text-[11px] font-mono font-bold text-muted-foreground bg-muted border px-2.5 py-1 rounded-md shadow-sm select-none">
                 {CURRENT_VERSION}
               </div>
+              </div>
             </div>
           </aside>
         </>
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className={cn("flex-1 flex flex-col min-w-0", !hideSidebar && "md:pl-64")}>
         <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex h-16 items-center px-4 md:px-6">
             {!hideSidebar && (

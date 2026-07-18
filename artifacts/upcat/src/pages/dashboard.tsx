@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame } from "lucide-react";
+import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar } from "lucide-react";
 import { useUpcatCountdown } from "@/hooks/useCountdown";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,25 @@ const UNIVERSITIES = [
   }
 ];
 
+const APPLICATION_TIMELINES = [
+  {
+    id: "admu",
+    fullName: "Ateneo de Manila University",
+    openStr: "June 22, 2026",
+    closeStr: "August 24, 2026",
+    openDate: new Date("2026-06-22T00:00:00"),
+    closeDate: new Date("2026-08-24T23:59:59"),
+  },
+  {
+    id: "dlsu",
+    fullName: "De La Salle University",
+    openStr: "July 15, 2026",
+    closeStr: "September 30, 2026",
+    openDate: new Date("2026-07-15T00:00:00"),
+    closeDate: new Date("2026-09-30T23:59:59"),
+  },
+];
+
 export default function Dashboard() {
   const { toast } = useToast();
   const upcatDaysLeft = useUpcatCountdown();
@@ -35,6 +54,12 @@ export default function Dashboard() {
   const [animateTrigger, setAnimateTrigger] = useState(0);
   const [dismissedWarning, setDismissedWarning] = useState(() => {
     return localStorage.getItem("kolehiyotrack_dismissed_auth_warning") === "true";
+  });
+
+  const visibleTimelines = APPLICATION_TIMELINES.filter((item) => {
+    if (!item.closeDate) return true;
+    const threeDaysAfterClose = new Date(item.closeDate.getTime() + 3 * 24 * 60 * 60 * 1000);
+    return new Date() <= threeDaysAfterClose;
   });
 
   useEffect(() => {
@@ -202,6 +227,60 @@ export default function Dashboard() {
                 )}
               </CardContent>
             </Card>
+
+            <h2 className="text-2xl font-bold tracking-tight mt-6">Application Timelines</h2>
+            <Card className="border border-border bg-card shadow-sm overflow-hidden">
+              <CardHeader className="pb-3 bg-muted/20 dark:bg-muted/10 border-b">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-indigo-500" />
+                  <div>
+                    <CardTitle className="text-sm font-bold">Admission Calendars</CardTitle>
+                    <CardDescription className="text-xs">University application dates & deadlines</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-4 space-y-3.5">
+                {visibleTimelines.length === 0 ? (
+                  <p className="text-xs text-muted-foreground text-center py-4">No active university application periods.</p>
+                ) : (
+                  visibleTimelines.map((item) => {
+                    const today = new Date();
+                    const hasOpened = today >= item.openDate;
+                    
+                    return (
+                      <div key={item.id} className="p-3 rounded-lg border bg-muted/10 border-muted-foreground/10 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                            {item.id.toUpperCase()}
+                          </span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${
+                            hasOpened 
+                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" 
+                              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                          }`}>
+                            {hasOpened ? "Applications Open" : "Opening Soon"}
+                          </span>
+                        </div>
+                        <p className="text-xs font-semibold text-muted-foreground">
+                          {item.fullName}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-muted/30 text-[11px]">
+                          <div>
+                            <span className="text-muted-foreground block text-[10px] uppercase">Open Date</span>
+                            <span className="font-semibold text-foreground">{item.openStr}</span>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground block text-[10px] uppercase">Close Date</span>
+                            <span className="font-semibold text-foreground">{item.closeStr}</span>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+
           </div>
 
           {/* Right Column: My Universities */}

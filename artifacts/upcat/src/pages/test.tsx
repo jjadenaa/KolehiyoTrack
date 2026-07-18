@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { markQuestionsUsed } from "@/lib/questionBank";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, XCircle } from "lucide-react";
 import { SmartText } from "@/components/SmartText";
 import { DiagramRenderer } from "@/components/DiagramRenderer";
 
@@ -283,6 +283,24 @@ export default function TestPage() {
               </Button>
             ))}
           </div>
+          {userAns?.selectedAnswer && (
+            <div className="flex justify-end pt-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  const next = { ...answers };
+                  delete next[q.id];
+                  answersRef.current = next;
+                  setAnswers(next);
+                }}
+                className="text-xs text-muted-foreground hover:text-destructive h-8 px-2.5 gap-1.5 hover:bg-destructive/10"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+                Clear Answer
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
