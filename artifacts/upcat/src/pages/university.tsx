@@ -1534,27 +1534,39 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
       })
       .finally(() => setIsLoadingSessions(false));
 
-    // Auto-sync question bank with Firestore on login
-    setBankSyncMsg("Syncing question bank with your account...");
-    setSyncFailed(false);
-    syncBankWithFirestore(user.uid, params.id)
-      .then(({ merged }) => {
-        setSyncFailed(false);
-        if (merged > 0) {
-          refreshBankStats();
-          setBankSyncMsg(`Synced ${merged} question(s) from your account.`);
-          setTimeout(() => {
-            setBankSyncMsg((prev) => prev.startsWith("Synced") ? "" : prev);
-          }, 4000);
-        } else {
-          setBankSyncMsg("");
-        }
-      })
-      .catch((err: any) => {
-        console.error("[Dashboard] Bank sync failed:", err);
-        setSyncFailed(true);
-        setBankSyncMsg(`Sync failed: ${err.message || "Unknown error"}`);
-      });
+    const doSync = () => {
+      setBankSyncMsg("Syncing question bank with your account...");
+      setSyncFailed(false);
+      syncBankWithFirestore(user.uid, params.id)
+        .then(({ merged }) => {
+          setSyncFailed(false);
+          if (merged > 0) {
+            refreshBankStats();
+            setBankSyncMsg(`Synced latest questions from your account.`);
+            setTimeout(() => {
+              setBankSyncMsg((prev) => prev.startsWith("Synced") ? "" : prev);
+            }, 4000);
+          } else {
+            setBankSyncMsg("");
+          }
+        })
+        .catch((err: any) => {
+          console.error("[Dashboard] Bank sync failed:", err);
+          setSyncFailed(true);
+          setBankSyncMsg(`Sync failed: ${err.message || "Unknown error"}`);
+        });
+    };
+
+    // Auto-sync on mount
+    doSync();
+
+    // Auto-sync on window focus to keep devices up to date
+    const onFocus = () => doSync();
+    window.addEventListener("focus", onFocus);
+    
+    return () => {
+      window.removeEventListener("focus", onFocus);
+    };
   }, [user, params.id, refreshBankStats]);
 
   // Keep trying to sync every 4 seconds if it fails and user is logged in

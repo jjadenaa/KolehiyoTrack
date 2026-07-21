@@ -25,8 +25,14 @@ export function getBankQuestions(uniId: string): BankQuestion[] {
   }
 }
 
-export function saveBankQuestions(questions: BankQuestion[], uniId: string): void {
+export function getBankUpdatedAt(uniId: string): number { return parseInt(localStorage.getItem(`kolehiyotrack_bank_updated_${uniId}`) || "0", 10) || 0; } 
+export function setBankUpdatedAt(uniId: string, timestamp: number): void { localStorage.setItem(`kolehiyotrack_bank_updated_${uniId}`, timestamp.toString()); }
+
+export function saveBankQuestions(questions: BankQuestion[], uniId: string, skipTimestampUpdate = false): void {
   localStorage.setItem(getBankKey(uniId), JSON.stringify(questions));
+  if (!skipTimestampUpdate) {
+    setBankUpdatedAt(uniId, Date.now());
+  }
 }
 
 export function addBankQuestions(incoming: BankQuestion[], uniId: string): { added: number; skipped: number } {
@@ -40,6 +46,7 @@ export function addBankQuestions(incoming: BankQuestion[], uniId: string): { add
 export function clearBank(uniId: string): void {
   localStorage.removeItem(getBankKey(uniId));
   localStorage.removeItem(getUsedKey(uniId));
+  setBankUpdatedAt(uniId, Date.now());
 }
 
 export function getUsedIds(uniId: string): Set<string> {

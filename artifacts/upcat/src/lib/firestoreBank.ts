@@ -5,7 +5,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { BankQuestion, getBankQuestions, saveBankQuestions } from "@/lib/questionBank";
+import { BankQuestion, getBankQuestions, saveBankQuestions, getBankUpdatedAt } from "@/lib/questionBank";
 
 function bankRef(uid: string, universityId: string) {
   return doc(db, "user_sessions", uid, "universities", universityId, "quizzes", "questionbank");
@@ -47,9 +47,10 @@ function cleanQuestions(questions: BankQuestion[]): unknown[] {
 export async function uploadBankToFirestore(uid: string, universityId: string): Promise<void> {
   try {
     const questions = getBankQuestions(universityId);
+    const localTime = getBankUpdatedAt(universityId);
     await setDoc(bankRef(uid, universityId), {
       questions: cleanQuestions(questions),
-      updatedAt: serverTimestamp(),
+      updatedAt: localTime,
     });
   } catch (err) {
     console.error("[uploadBankToFirestore] Failed to upload question bank:", err);
@@ -57,36 +58,58 @@ export async function uploadBankToFirestore(uid: string, universityId: string): 
   }
 }
 
-export async function downloadBankFromFirestore(uid: string, universityId: string): Promise<BankQuestion[]> {
+export async function downloadBankFromFirestoreFull(uid: string, universityId: string): Promise<{ questions: BankQuestion[], updatedAt: number }> {
   try {
     const snap = await getDoc(bankRef(uid, universityId));
-    if (!snap.exists()) return [];
+    if (!snap.exists()) return { questions: [], updatedAt: 0 };
     const data = snap.data();
-    return (data?.questions ?? []) as BankQuestion[];
+    let updatedAt = 0;
+    if (data?.updatedAt != null) {
+      if (typeof data.updatedAt === 'number') {
+        updatedAt = data.updatedAt;
+      } else if (typeof data.updatedAt.toMillis === 'function') {
+        updatedAt = data.updatedAt.toMillis();
+      }
+    }
+    return {
+      questions: (data?.questions ?? []) as BankQuestion[],
+      updatedAt
+    };
   } catch (err) {
-    console.error("[downloadBankFromFirestore] Failed to download question bank:", err);
+    console.error("[downloadBankFromFirestoreFull] Failed to download question bank:", err);
     throw err;
   }
 }
 
+export async function downloadBankFromFirestore(uid: string, universityId: string): Promise<BankQuestion[]> {
+  const { questions } = await downloadBankFromFirestoreFull(uid, universityId);
+  return questions;
+}
+
 export async function syncBankWithFirestore(uid: string, universityId: string): Promise<{ merged: number }> {
   try {
-    const remote = await downloadBankFromFirestore(uid, universityId);
+    const { questions: remote, updatedAt: remoteTime } = await downloadBankFromFirestoreFull(uid, universityId);
+    
     const local = getBankQuestions(universityId);
-    const localIds = new Set(local.map((q) => q.id));
+    const localTime = getBankUpdatedAt(universityId);
+
+    if (remoteTime > localTime) {
+      // Remote is newer, pull changes (completely replace local)
+      saveBankQuestions(remote, universityId, true); // skip timestamp update so we don't accidentally make local "newer" without real edits
+      
+      // We still need to calculate if anything was "merged" for UI feedback, 
+      // but in reality we just replaced it.
+      return { merged: remote.length };
+    } else if (localTime > remoteTime) {
+      // Local is newer, push changes
+      await setDoc(bankRef(uid, universityId), {
+        questions: cleanQuestions(local),
+        updatedAt: localTime,
+      });
+      return { merged: 0 };
+    }
     
-    const toAdd = remote.filter((q) => !localIds.has(q.id));
-    if (toAdd.length === 0) return { merged: 0 };
-    
-    const merged = [...local, ...toAdd];
-    saveBankQuestions(merged, universityId);
-    
-    await setDoc(bankRef(uid, universityId), {
-      questions: cleanQuestions(merged),
-      updatedAt: serverTimestamp(),
-    });
-    
-    return { merged: toAdd.length };
+    return { merged: 0 };
   } catch (err) {
     console.error("[syncBankWithFirestore] Failed to sync question bank:", err);
     throw err;
