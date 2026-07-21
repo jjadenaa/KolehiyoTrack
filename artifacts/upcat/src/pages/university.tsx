@@ -710,23 +710,34 @@ function PromptGeneratorPanel({
         parts.push("- CRITICAL: Do NOT randomize the order of questions within a passage. Keep all questions for passage 1 together, then all questions for passage 2, etc. Ensure that all options (A, B, C, D) are completely written out and fully visible without getting cut off at the bottom.");
         parts.push("");
         parts.push("OUTPUT FORMAT FOR READING COMPREHENSION (plain text — NOT JSON):");
-        parts.push("Use this exact plain text format for each question. Separate questions with a blank line.");
+        parts.push("Use this exact plain text format. Provide the passage ONCE, followed by all its questions. Separate blocks with a blank line.");
         parts.push("");
         parts.push(`UNIVERSITY: ${quizName}`);
-        parts.push(`ID: ${universityId}_rc_[lang]_[number]`);
         parts.push("SUBJECT: Reading [English/Filipino]");
         parts.push("TOPIC: [topic name]");
-        parts.push("PASSAGE: [full passage text here]");
-        parts.push("QUESTION: [question text here]");
+        parts.push("PASSAGE: [full passage text here. Generate the passage ONCE.]");
+        parts.push("");
+        parts.push(`ID: ${universityId}_rc_[lang]_[number]`);
+        parts.push("QUESTION: [question 1 text here for the above passage]");
         parts.push("A) [choice text]");
         parts.push("B) [choice text]");
         parts.push("C) [choice text]");
         parts.push("D) [choice text]");
         parts.push("CORRECT: [A/B/C/D]");
         parts.push("EXPLANATION: [brief explanation here]");
-        parts.push("DIAGRAM: [optional JSON object for geometric shapes, see diagram rules above. Omit if no shape.]");
+        parts.push("DIAGRAM: [optional JSON object for geometric shapes. Omit if no shape.]");
+        parts.push("");
+        parts.push(`ID: ${universityId}_rc_[lang]_[number+1]`);
+        parts.push("QUESTION: [question 2 text for the same passage]");
+        parts.push("A) [choice text]");
+        parts.push("B) [choice text]");
+        parts.push("C) [choice text]");
+        parts.push("D) [choice text]");
+        parts.push("CORRECT: [A/B/C/D]");
+        parts.push("EXPLANATION: [brief explanation here]");
         parts.push("");
         parts.push("RULES:");
+        parts.push("- DO NOT REPEAT the passage for every question. Generate the PASSAGE: block once, then list the ID: and QUESTION: blocks for that passage.");
         parts.push("- The PASSAGE area must contain ONLY the passage text. Do NOT put the question inside the PASSAGE area.");
         parts.push("- The QUESTION area must contain ONLY the question text. Do NOT put the passage inside the QUESTION area.");
         parts.push("- Keep all questions for the same passage together in the output, one after another.");
@@ -909,10 +920,14 @@ function PromptGeneratorPanel({
       }
 
       // 2. Try simple text format (ID:, SUBJECT:, PASSAGE:, QUESTION:, A), B), C), D), CORRECT:, EXPLANATION:)
-      const blocks = text.split(/\n-{3,}\n|\n\n(?=UNIVERSITY:\s|ID:\s)/i).filter((b) => b.trim().length > 0);
+      const blocks = text.split(/\n-{3,}\n|\n\n(?=UNIVERSITY:\s|ID:\s|PASSAGE:\s|SUBJECT:\s)/i).filter((b) => b.trim().length > 0);
       const valid: BankQuestion[] = [];
       let currentPassageId = 0;
       let lastPassageText = "";
+
+      let persistentSubject = "";
+      let persistentTopic = "";
+      let persistentPassage = "";
 
       for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
         const block = blocks[blockIdx].trim();
@@ -920,9 +935,10 @@ function PromptGeneratorPanel({
 
         const lines = block.split("\n");
         let id = "";
-        let subject = "";
-        let topic = "";
-        let passage = "";
+        let currentBlockSubject = "";
+        let currentBlockTopic = "";
+        let currentBlockPassage = "";
+        let hasExplicitPassage = false;
         let question = "";
         const choices: { id: string; text: string }[] = [];
         let correctAnswer = "";
@@ -938,12 +954,13 @@ function PromptGeneratorPanel({
             id = line.slice(3).trim();
             i++;
           } else if (upper.startsWith("SUBJECT:")) {
-            subject = line.slice(8).trim();
+            currentBlockSubject = line.slice(8).trim();
             i++;
           } else if (upper.startsWith("TOPIC:")) {
-            topic = line.slice(6).trim();
+            currentBlockTopic = line.slice(6).trim();
             i++;
           } else if (upper.startsWith("PASSAGE:")) {
+            hasExplicitPassage = true;
             // Collect multi-line passage until QUESTION: or A) or end of block
             const start = line.startsWith("PASSAGE:") ? line.slice(8).trim() : "";
             const passageLines: string[] = start ? [start] : [];
@@ -964,7 +981,7 @@ function PromptGeneratorPanel({
               passageLines.push(next);
               i++;
             }
-            passage = passageLines.join("\n").trim();
+            currentBlockPassage = passageLines.join("\n").trim();
           } else if (upper.startsWith("QUESTION:")) {
             const start = line.slice(9).trim();
             const qLines: string[] = start ? [start] : [];
@@ -1037,6 +1054,20 @@ function PromptGeneratorPanel({
             i++;
           }
         }
+
+        if (currentBlockSubject !== "") {
+          if (currentBlockSubject !== persistentSubject) {
+             persistentTopic = "";
+             persistentPassage = "";
+          }
+          persistentSubject = currentBlockSubject;
+        }
+        if (currentBlockTopic !== "") persistentTopic = currentBlockTopic;
+        if (hasExplicitPassage) persistentPassage = currentBlockPassage;
+
+        const subject = currentBlockSubject || persistentSubject;
+        const topic = currentBlockTopic || persistentTopic;
+        const passage = hasExplicitPassage ? currentBlockPassage : persistentPassage;
 
         if (!id || !subject || choices.length < 2) continue;
 
