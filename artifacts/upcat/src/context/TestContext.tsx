@@ -174,6 +174,10 @@ export function TestProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, [user, universityId]);
 
+  // Keep track of current status for the snapshot listener without adding it to dependencies
+  const statusRef = useRef(status);
+  useEffect(() => { statusRef.current = status; }, [status]);
+
   // 3. REAL-TIME ACTIVE QUIZ PROGRESS LISTENER (REMOTE TO LOCAL)
   useEffect(() => {
     if (!user || !universityId) return;
@@ -184,7 +188,7 @@ export function TestProvider({ children }: { children: ReactNode }) {
       if (!snap.exists()) {
         // If doc is deleted, but we are running, let's see if we should reset to idle (meaning finished or aborted elsewhere)
         // Only trigger if we aren't the one who initiated/reset the test locally
-        if (status !== "idle" && status !== "finished" && !internalStateChangeRef.current) {
+        if (statusRef.current !== "idle" && statusRef.current !== "finished" && !internalStateChangeRef.current) {
           console.log("[Realtime Active Quiz] Remote active quiz was deleted. Setting local status to idle.");
           resetTest();
         }
@@ -222,7 +226,7 @@ export function TestProvider({ children }: { children: ReactNode }) {
     });
 
     return () => unsub();
-  }, [user, universityId, deviceId, status, resetTest]);
+  }, [user, universityId, deviceId, resetTest]);
 
   // 4. WRITE LOCAL ACTIVE QUIZ CHANGES TO FIRESTORE
   const syncActiveQuizToFirestore = useCallback(async (
