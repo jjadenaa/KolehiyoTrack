@@ -59,14 +59,20 @@ export function getUsedIds(uniId: string): Set<string> {
   }
 }
 
+export function saveUsedIds(ids: string[], uniId: string): void {
+  localStorage.setItem(getUsedKey(uniId), JSON.stringify(ids));
+}
+
 export function markQuestionsUsed(ids: string[], uniId: string): void {
   const used = getUsedIds(uniId);
   ids.forEach((id) => used.add(id));
-  localStorage.setItem(getUsedKey(uniId), JSON.stringify([...used]));
+  saveUsedIds([...used], uniId);
+  setBankUpdatedAt(uniId, Date.now());
 }
 
 export function resetUsedIds(uniId: string): void {
   localStorage.removeItem(getUsedKey(uniId));
+  setBankUpdatedAt(uniId, Date.now());
 }
 
 function getPassageId(q: BankQuestion): string | null {

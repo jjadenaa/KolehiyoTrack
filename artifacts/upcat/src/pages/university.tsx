@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
-import { listSessions } from "@/lib/firestoreSessions";
 import { syncBankWithFirestore, uploadBankToFirestore } from "@/lib/firestoreBank";
 import { Session } from "@/types/session";
 import { useTest } from "@/context/TestContext";
@@ -1464,7 +1463,18 @@ function PaginatedSessions({
 
 export default function UniversityPage({ params }: { params: { id: string } }) {
   const [, setLocation] = useLocation();
-  const { setUniversityId, setQuestions, setTimeRemaining, setStatus, resetTest, questions, status } = useTest();
+  const {
+    setUniversityId,
+    setQuestions,
+    setTimeRemaining,
+    setStatus,
+    resetTest,
+    questions,
+    status,
+    pastSessions,
+    sessionsLoaded,
+    bankTrigger
+  } = useTest();
 
   useEffect(() => {
     setUniversityId(params.id);
@@ -1490,8 +1500,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
   const [startError, setStartError] = useState("");
 
   const { user } = useAuth();
-  const [pastSessions, setPastSessions] = useState<Session[]>([]);
-  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const isLoadingSessions = !sessionsLoaded;
   const [bankSyncing, setBankSyncing] = useState(false);
   const [bankSyncMsg, setBankSyncMsg] = useState("");
   const [syncFailed, setSyncFailed] = useState(false);
@@ -1521,18 +1530,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
   }, [user, params.id]);
 
   useEffect(() => {
-    if (!user) {
-      setPastSessions([]);
-      return;
-    }
-    setIsLoadingSessions(true);
-    listSessions(user.uid, params.id)
-      .then(setPastSessions)
-      .catch((err) => {
-        console.error("[Dashboard] Failed to load past sessions:", err);
-        setPastSessions([]);
-      })
-      .finally(() => setIsLoadingSessions(false));
+    if (!user) return;
 
     const doSync = () => {
       setBankSyncMsg("Syncing question bank with your account...");
@@ -1583,7 +1581,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     refreshBankStats();
-  }, [refreshBankStats]);
+  }, [refreshBankStats, bankTrigger]);
 
   const totalSeconds = useMemo(
     () => calcTotalSeconds(selectedSubjects, itemCounts),
@@ -1652,6 +1650,9 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
   const handleResetUsed = () => {
     resetUsedIds(params.id);
     refreshBankStats();
+    if (user) {
+      handleSyncBank();
+    }
   };
 
   const isReady = status === "ready" && questions.length > 0;

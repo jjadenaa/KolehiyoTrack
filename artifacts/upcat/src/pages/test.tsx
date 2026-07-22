@@ -177,6 +177,12 @@ export default function TestPage() {
       try {
         const saved = await saveSession(user.uid, universityId, sessionData);
         setLastSession(saved);
+        try {
+          const { uploadBankToFirestore } = await import("@/lib/firestoreBank");
+          await uploadBankToFirestore(user.uid, universityId);
+        } catch (syncErr) {
+          console.error("Failed to upload updated bank state:", syncErr);
+        }
       } catch (err) {
         console.error("Failed to save session to Firestore:", err);
         setLastSession({ id: "local", ...sessionData, createdAt: new Date().toISOString() });
