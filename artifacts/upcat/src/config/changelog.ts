@@ -9,10 +9,20 @@ export interface ChangelogItem {
 }
 
 // 1. Change your global version number here
-export const CURRENT_VERSION = "v0.1.0 Beta";
+export const CURRENT_VERSION = "v0.2.0 Beta";
 
 // 2. Add or update release notes here (newest first)
 export const CHANGELOG_DATA: ChangelogItem[] = [
+  {
+    version: "v0.2.0",
+    date: "July 24, 2026",
+    changes: [
+      {
+        title: "Bicol University College Entrance Test 2027, Bug fixes + More",
+        description: "Added BUCET 2027 Mock Tests, improved question sync and fixed major bugs. "
+      }
+    ]
+  },
   {
     version: "v0.1.0",
     date: "July 17, 2026",

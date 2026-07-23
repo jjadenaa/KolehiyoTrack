@@ -169,7 +169,7 @@ export function DailyMissionsTracker({ sessions, universityId = "upcat" }: Daily
       minPercent: number,
       maxPercent: number
     ) => {
-      const netScore = correct - 0.25 * wrong;
+      const netScore = universityId === "upcat" ? correct - 0.25 * wrong : correct;
       const accuracyPercent = total > 0 ? (netScore / total) * 100 : 0;
       const estNetScoreOnTargetScale = total > 0 ? (netScore / total) * targetItems : 0;
       
@@ -390,7 +390,7 @@ export function DailyMissionsTracker({ sessions, universityId = "upcat" }: Daily
                     <div className="space-y-0.5">
                       <span className="text-xs font-bold text-foreground block">{sub.name}</span>
                       <span className="text-[10px] text-muted-foreground">
-                        Goal: <strong className="text-foreground">{sub.targetPercent}</strong> (Net score: {sub.targetScore})
+                        Goal: <strong className="text-foreground">{sub.targetPercent}</strong> ({universityId === "upcat" ? "Net score" : "Score"}: {sub.targetScore})
                       </span>
                     </div>
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${sub.metric.statusColor}`}>
@@ -404,7 +404,7 @@ export function DailyMissionsTracker({ sessions, universityId = "upcat" }: Daily
                         <span>No practice data yet</span>
                       ) : (
                         <>
-                          <span>Avg: <strong className="text-foreground font-semibold">{sub.metric.accuracyPercent}% Net</strong> ({sub.metric.answered} q's)</span>
+                          <span>Avg: <strong className="text-foreground font-semibold">{sub.metric.accuracyPercent}% {universityId === "upcat" ? "Net" : "Score"}</strong> ({sub.metric.answered} q's)</span>
                           <span>Est: <strong className="text-primary font-bold">{sub.metric.estNetScoreOnTargetScale} / {sub.items}</strong></span>
                         </>
                       )}

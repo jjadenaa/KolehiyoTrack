@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar } from "lucide-react";
+import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar, Trash2, Edit3 } from "lucide-react";
 import { useUpcatCountdown } from "@/hooks/useCountdown";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -24,10 +24,25 @@ const UNIVERSITIES = [
     name: 'University of the Philippines - (UPCAT 2027)', 
     date: 'August 1-2, 2026',
     description: ''
+  },
+  {
+    id: 'bu',
+    name: 'Bicol University - (BUCET 2027)',
+    date: 'TBA',
+    description: ''
   }
 ];
 
-const APPLICATION_TIMELINES = [
+interface ApplicationTimeline {
+  id: string;
+  fullName: string;
+  openStr: string;
+  closeStr: string;
+  openDate: Date;
+  closeDate?: Date;
+}
+
+const APPLICATION_TIMELINES: ApplicationTimeline[] = [
   {
     id: "admu",
     fullName: "Ateneo de Manila University",
@@ -44,6 +59,13 @@ const APPLICATION_TIMELINES = [
     openDate: new Date("2026-07-15T00:00:00"),
     closeDate: new Date("2026-09-30T23:59:59"),
   },
+  {
+    id: "bu",
+    fullName: "Bicol University",
+    openStr: "July 23, 2026",
+    closeStr: "TBA",
+    openDate: new Date("2026-07-23T00:00:00"),
+  },
 ];
 
 export default function Dashboard() {
@@ -55,6 +77,30 @@ export default function Dashboard() {
   const [dismissedWarning, setDismissedWarning] = useState(() => {
     return localStorage.getItem("kolehiyotrack_dismissed_auth_warning") === "true";
   });
+
+  const [addedUniIds, setAddedUniIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem("kolehiyotrack_added_universities");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const handleSync = () => {
+      const saved = localStorage.getItem("kolehiyotrack_added_universities");
+      setAddedUniIds(saved ? JSON.parse(saved) : []);
+    };
+    window.addEventListener("kolehiyotrack_universities_changed", handleSync);
+    return () => window.removeEventListener("kolehiyotrack_universities_changed", handleSync);
+  }, []);
+
+  const filteredUniversities = UNIVERSITIES.filter(uni => addedUniIds.includes(uni.id));
+
+  useEffect(() => {
+    if (filteredUniversities.length === 0) {
+      setIsEditMode(false);
+    }
+  }, [filteredUniversities.length]);
 
   const visibleTimelines = APPLICATION_TIMELINES.filter((item) => {
     if (!item.closeDate) return true;
@@ -167,10 +213,14 @@ export default function Dashboard() {
     setDismissedWarning(true);
   };
 
-  const handleAddUniversity = () => {
+  const handleRemoveUniversity = (id: string) => {
+    const newIds = addedUniIds.filter(uniId => uniId !== id);
+    setAddedUniIds(newIds);
+    localStorage.setItem("kolehiyotrack_added_universities", JSON.stringify(newIds));
+    window.dispatchEvent(new Event("kolehiyotrack_universities_changed"));
     toast({
-      title: "Coming Soon",
-      description: "More universities will be added in a future update.",
+      title: "University Removed",
+      description: "University has been removed from your list of active study goals.",
     });
   };
 
@@ -287,69 +337,124 @@ export default function Dashboard() {
           <div className="lg:col-span-2 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-2xl font-bold tracking-tight">My Universities</h2>
-              <Button onClick={handleAddUniversity} className="gap-2">
-                <Plus className="h-4 w-4" />
-                Add
-              </Button>
+              <div className="flex items-center gap-2">
+                {filteredUniversities.length > 0 && (
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => setIsEditMode(!isEditMode)} 
+                    className="gap-2 h-9 text-xs sm:text-sm font-semibold border-muted-foreground/20 hover:bg-muted"
+                  >
+                    <Edit3 className="h-4 w-4 text-muted-foreground" />
+                    {isEditMode ? "Done" : "Edit"}
+                  </Button>
+                )}
+                <Button onClick={() => setAddDialogOpen(true)} size="sm" className="gap-2 h-9 text-xs sm:text-sm font-semibold">
+                  <Plus className="h-4 w-4" />
+                  Add
+                </Button>
+              </div>
             </div>
 
             <div className="grid gap-4">
-              {UNIVERSITIES.map((uni) => (
-                <Card key={uni.id} className="overflow-hidden border transition-all hover:border-primary/50 shadow-sm">
-                  <div className="flex flex-col sm:flex-row">
-                    {/* Left side info */}
-                    <div className="p-5 flex-1 flex flex-row items-center gap-4">
-                      <img 
-                        src={`${import.meta.env.BASE_URL}up-logo.png`} 
-                        alt="UP logo" 
-                        className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
-                      />
-                      <div className="flex-1 min-w-0">
-                        <CardTitle className="text-lg sm:text-xl font-bold">{uni.name}</CardTitle>
-                        <div className="flex flex-wrap items-center gap-3 mt-2">
-                          <p className="text-sm sm:text-base font-semibold text-primary">
-                            {uni.date || "TBA"}
-                          </p>
-                          {uni.id === 'upcat' ? (
-                            <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
-                              <Clock className="h-3 w-3 text-rose-500 animate-pulse" />
-                              <span className="text-xs">{upcatDaysLeft} days remaining</span>
-                            </Badge>
-                          ) : uni.date ? (
-                            <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
-                              <Clock className="h-3 w-3 text-primary" />
-                              <span className="text-xs">{uni.date}</span>
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
-                              <Clock className="h-3 w-3 text-primary" />
-                              <span className="text-xs">TBA</span>
-                            </Badge>
+              {filteredUniversities.length === 0 ? (
+                <Card className="border border-dashed p-8 text-center flex flex-col items-center justify-center space-y-4 bg-muted/5 py-12">
+                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                    <GraduationCap className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <CardTitle className="text-lg font-bold">No Universities Added</CardTitle>
+                    <CardDescription className="text-sm max-w-sm mx-auto">
+                      Select universities you want to prepare for to start studying.
+                    </CardDescription>
+                  </div>
+                  <Button onClick={() => setAddDialogOpen(true)} className="gap-2 font-semibold">
+                    <Plus className="h-4 w-4" />
+                    Add a University
+                  </Button>
+                </Card>
+              ) : (
+                filteredUniversities.map((uni) => (
+                  <Card key={uni.id} className="overflow-hidden border transition-all hover:border-primary/50 shadow-sm">
+                    <div className="flex flex-col sm:flex-row">
+                      {/* Left side info */}
+                      <div className="p-5 flex-1 flex flex-row items-center gap-4">
+                        {uni.id === 'upcat' ? (
+                          <img 
+                            src={`${import.meta.env.BASE_URL}up-logo.png`} 
+                            alt="UP logo" 
+                            className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
+                          />
+                        ) : uni.id === 'bu' ? (
+                          <img 
+                            src={`${import.meta.env.BASE_URL}bu-logo.png`} 
+                            alt="BU logo" 
+                            className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
+                          />
+                        ) : (
+                          <div className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 flex items-center justify-center bg-muted rounded-full">
+                            <GraduationCap className="h-8 w-8 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-lg sm:text-xl font-bold">{uni.name}</CardTitle>
+                          <div className="flex flex-wrap items-center gap-3 mt-2">
+                            <p className={uni.id === 'bu' ? "text-sm sm:text-base font-semibold text-[#009cb8]" : "text-sm sm:text-base font-semibold text-primary"}>
+                              {uni.date || "TBA"}
+                            </p>
+                            {uni.id === 'upcat' ? (
+                              <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
+                                <Clock className="h-3 w-3 text-rose-500 animate-pulse" />
+                                <span className="text-xs">{upcatDaysLeft} days remaining</span>
+                              </Badge>
+                            ) : uni.date ? (
+                              <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
+                                <Clock className="h-3 w-3 text-primary" />
+                                <span className="text-xs">{uni.date}</span>
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
+                                <Clock className="h-3 w-3 text-primary" />
+                                <span className="text-xs">TBA</span>
+                              </Badge>
+                            )}
+                          </div>
+                          {uni.description && (
+                            <CardDescription className="mt-2 text-sm">
+                              {uni.description}
+                            </CardDescription>
                           )}
                         </div>
-                        {uni.description && (
-                          <CardDescription className="mt-2 text-sm">
-                            {uni.description}
-                          </CardDescription>
+                      </div>
+                      
+                      {/* Right side action */}
+                      <div className="p-5 flex items-center justify-center bg-muted/30 sm:w-48 shrink-0 sm:border-l">
+                        {isEditMode ? (
+                          <Button 
+                            variant="destructive"
+                            size="default" 
+                            className="w-full gap-2 text-sm h-10 font-semibold shadow-sm"
+                            onClick={() => handleRemoveUniversity(uni.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Remove
+                          </Button>
+                        ) : (
+                          <Link href={`/university/${uni.id}`} className="w-full">
+                            <Button 
+                              size="default" 
+                              className="w-full gap-2 text-sm h-10 font-semibold shadow-sm"
+                            >
+                              Study Now
+                              <ArrowRight className="h-4 w-4" />
+                            </Button>
+                          </Link>
                         )}
                       </div>
                     </div>
-                    
-                    {/* Right side action */}
-                    <div className="p-5 flex items-center justify-center bg-muted/30 sm:w-48 shrink-0 sm:border-l">
-                      <Link href={`/university/${uni.id}`} className="w-full">
-                        <Button 
-                          size="default" 
-                          className="w-full gap-2 text-sm h-10 font-semibold shadow-sm"
-                        >
-                          Study Now
-                          <ArrowRight className="h-4 w-4" />
-                        </Button>
-                      </Link>
-                    </div>
-                  </div>
-                </Card>
-              ))}
+                  </Card>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -399,6 +504,71 @@ export default function Dashboard() {
               Sign in with Google
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <Plus className="h-5 w-5 text-primary" />
+              Add University
+            </DialogTitle>
+            <DialogDescription>
+              Choose a university to add to your personalized dashboard goals.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3.5 my-4">
+            {UNIVERSITIES.map((uni) => {
+              const isAdded = addedUniIds.includes(uni.id);
+              return (
+                <div key={uni.id} className="flex items-center justify-between p-3.5 rounded-lg border bg-muted/20 hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-3">
+                    {uni.id === 'upcat' ? (
+                      <img 
+                        src={`${import.meta.env.BASE_URL}up-logo.png`} 
+                        alt="UP logo" 
+                        className="h-10 w-10 shrink-0 object-contain" 
+                      />
+                    ) : uni.id === 'bu' ? (
+                      <img 
+                        src={`${import.meta.env.BASE_URL}bu-logo.png`} 
+                        alt="BU logo" 
+                        className="h-10 w-10 shrink-0 object-contain" 
+                      />
+                    ) : (
+                      <div className="h-10 w-10 shrink-0 flex items-center justify-center bg-muted rounded-full">
+                        <GraduationCap className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h4 className="text-sm font-bold text-foreground leading-snug">{uni.name}</h4>
+                      <p className="text-xs text-muted-foreground mt-0.5">{uni.date || "TBA"}</p>
+                    </div>
+                  </div>
+                  <Button 
+                    size="sm" 
+                    variant={isAdded ? "outline" : "default"}
+                    disabled={isAdded}
+                    className="font-semibold cursor-pointer h-8"
+                    onClick={() => {
+                      const newIds = [...addedUniIds, uni.id];
+                      setAddedUniIds(newIds);
+                      localStorage.setItem("kolehiyotrack_added_universities", JSON.stringify(newIds));
+                      window.dispatchEvent(new Event("kolehiyotrack_universities_changed"));
+                      toast({
+                        title: "University Added",
+                        description: `${uni.id === 'upcat' ? 'UPCAT' : 'BUCET'} has been added to your universities.`,
+                      });
+                      setAddDialogOpen(false);
+                    }}
+                  >
+                    {isAdded ? "Added" : "Add"}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
         </DialogContent>
       </Dialog>
     </Layout>

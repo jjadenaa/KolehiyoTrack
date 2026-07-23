@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { syncBankWithFirestore, uploadBankToFirestore } from "@/lib/firestoreBank";
 import { Session } from "@/types/session";
 import { useTest } from "@/context/TestContext";
-import { SUBJECT_LABELS, formatTime, calcTotalSeconds, SECONDS_PER_ITEM } from "@/lib/format";
+import { SUBJECT_LABELS, formatTime, calcTotalSeconds, getSecondsPerItem } from "@/lib/format";
 import { Layout } from "@/components/layout";
 import { DailyMissionsTracker } from "@/components/DailyMissionsTracker";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -677,7 +677,7 @@ function PromptGeneratorPanel({
         const passageCountMin = Math.ceil(count / 5);
         const passageCountMax = Math.ceil(count / 2);
         parts.push("");
-        parts.push("[UPCAT READING COMPREHENSION CALIBRATION]");
+        parts.push(`[${quizName} READING COMPREHENSION CALIBRATION]`);
         parts.push(`- Language: ${lang}.`);
         parts.push(`- Create ${passageCountMin} to ${passageCountMax} distinct passages.`);
         parts.push("Creat new passages and question every prompt you may never reuse any passages from previous sets. Use new topics, data, and sources every time");
@@ -747,7 +747,7 @@ function PromptGeneratorPanel({
 
       if (subject.id === "math") {
         parts.push("");
-        parts.push("[UPCAT MATHEMATICS CALIBRATION]");
+        parts.push(`[${quizName} MATHEMATICS CALIBRATION]`);
         parts.push("- Focus on: Number systems, algebraic expressions, functions, linear/quadratic equations, geometry, trigonometry, and word problems (age,coins,variations, mixture, motion, investment).");
         parts.push("- Keep calculations realistic, clean, and quickly solvable on scratch paper without messy long-form arithmetic. Don't make the questions confusing, impossible, difficult. Make it simple and straightforward that we can solve mentally and with scratch papers without the use of calculators. PLEASE USE THE REFERENCE MOCK EXAM VIDEOS AND REVIEWER IMAGES TO MAKE QUESTIONS.");
         parts.push("- Use ONLY Unicode math symbols and inline text — NEVER use LaTeX markup like $\\frac{}{}$ or $\\sqrt{}$.");
@@ -757,7 +757,7 @@ function PromptGeneratorPanel({
         parts.push("- For multiplication: use × or implied (e.g., 2x + 3).");
         parts.push("- For pi: use π. For degrees: use °.");
         parts.push("- Question stems must be short, punchy, direct, and get straight to the point without dense blocks of unnecessary text.");
-        parts.push("Maintain 100% consistency with all official UPCAT review pages and mock test resources provided across our training sessions");
+        parts.push(`Maintain 100% consistency with all official ${quizName} review pages and mock test resources provided across our training sessions`);
         parts.push("Math Reviewer Materials:** image_ad7fc1.png, image_ad7fc3.png, image_ad7fdb.png, image_ad7fde.png, image_ad7fe1.png, image_ad8019.png, image_ad801f.png, image_ad8038.png, image_ad803d.png (and related PME reviewer sheets).");
         parts.push("Reference Mock Exam Video 1:** https://www.youtube.com/watch?v=5mhI1ijHboc");
         parts.push("**Reference Mock Exam Video 2:** https://www.youtube.com/watch?v=ythY0Cr3CGA&start=364");
@@ -795,7 +795,7 @@ function PromptGeneratorPanel({
 
       if (subject.id === "science") {
         parts.push("");
-        parts.push("[UPCAT SCIENCE CALIBRATION]");
+        parts.push(`[${quizName} SCIENCE CALIBRATION]`);
         parts.push("- Focus strictly on foundational computational physics (basic forces, kinematics, motion) and core chemistry concepts (mass conservation, solutions) modeled directly after official test parameters.");
         parts.push ("**Core Benchmarks:** Maroon Bluebook and Review Masters Syntax/Difficulty Standards. Don't make the questions confusing, impossible, difficult. Make it simple and straightforward that we can solve mentally and with scratch papers without the use of calculators. PLEASE USE THE REFERENCE MOCK EXAM VIDEOS AND REVIEWER IMAGES TO MAKE QUESTIONS.");
         parts.push("- Questions should require genuine understanding, not just memorization of terms.");
@@ -823,7 +823,7 @@ function PromptGeneratorPanel({
 
       if (subject.id === "language_english" || subject.id === "language_filipino") {
         parts.push("");
-        parts.push("[UPCAT LANGUAGE PROFICIENCY CALIBRATION]");
+        parts.push(`[${quizName} LANGUAGE PROFICIENCY CALIBRATION]`);
         parts.push(" Must strictly mirror the question patterns, straightforward style, word-level syntax rules, AND LEVEL OF DIFFICULTY demonstrated in the Maroon Bluebook and Review Masters pages,  also from the general reviewers BASICALLY ALL IMAGES THAT I HAVE SENT. Reduce question complexity to eliminate confusing, overly engineered sentences; ensure questions are NOT harder than these reference materials anchor everything directly to these images, reviewers, and images. Also CHECK the youtube links for the guide in making the questions. The designated correct_answer string must be DOUBLE-CHECKED against the linguistic rule before exporting to prevent wrong answer key mismatches. STRICTLY NO MORE over-engineered grammar scenarios.");
         parts.push("1. For Identifying Errors, there must be exactly 4 **bolded** choices labeled (A), (B), (C), and (D) embedded directly within the sentence.");
         parts.push("- short, concise segments. I will exclude extraneous nouns or correct phrases that are not part of the grammatical trap. Only the specific words/segments provided in the choices will be **bolded** in the sentence and the list...");
@@ -1483,14 +1483,25 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
   const [selectedSubjects, setSelectedSubjects] = useState<Record<string, boolean>>(
     AVAILABLE_SUBJECTS.reduce((acc, s) => ({ ...acc, [s.id]: false }), {})
   );
-  const [itemCounts, setItemCounts] = useState<Record<string, number>>({
-    language_english: 40,
-    language_filipino: 40,
-    math: 60,
-    science: 60,
-    reading_english: 40,
-    reading_filipino: 40,
-  });
+  const [itemCounts, setItemCounts] = useState<Record<string, number>>(
+    params.id === 'bu' 
+      ? {
+          language_english: 30,
+          language_filipino: 30,
+          math: 50,
+          science: 60,
+          reading_english: 30,
+          reading_filipino: 30,
+        }
+      : {
+          language_english: 40,
+          language_filipino: 40,
+          math: 60,
+          science: 60,
+          reading_english: 40,
+          reading_filipino: 40,
+        }
+  );
   const [selectedTopics, setSelectedTopics] = useState<Record<string, string[]>>(
     AVAILABLE_SUBJECTS.reduce((acc, s) => ({ ...acc, [s.id]: [ALL_TOPICS_VALUE] }), {})
   );
@@ -1584,8 +1595,8 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
   }, [refreshBankStats, bankTrigger]);
 
   const totalSeconds = useMemo(
-    () => calcTotalSeconds(selectedSubjects, itemCounts),
-    [selectedSubjects, itemCounts]
+    () => calcTotalSeconds(selectedSubjects, itemCounts, params.id),
+    [selectedSubjects, itemCounts, params.id]
   );
 
   const totalQuestions = useMemo(() => {
@@ -1673,15 +1684,34 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
 
       <div className="space-y-8">
         <div className="space-y-4">
-          <div className="space-y-1">
-            <h1 className="text-3xl font-extrabold tracking-tight text-foreground">
-              {params.id === 'upcat' ? "University of the Philippines - (UPCAT 2027)" : "Mock Test Configuration"}
-            </h1>
-            {params.id === 'upcat' && (
-              <p className="text-lg font-semibold text-primary">
-                August 1-2, 2026
-              </p>
-            )}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            {params.id === 'upcat' ? (
+              <img 
+                src={`${import.meta.env.BASE_URL}up-logo.png`} 
+                alt="UP logo" 
+                className="h-16 w-16 shrink-0 object-contain" 
+              />
+            ) : params.id === 'bu' ? (
+              <img 
+                src={`${import.meta.env.BASE_URL}bu-logo.png`} 
+                alt="BU logo" 
+                className="h-16 w-16 shrink-0 object-contain" 
+              />
+            ) : null}
+            <div className="space-y-1">
+              <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
+                {params.id === 'upcat' ? "University of the Philippines - (UPCAT 2027)" : params.id === 'bu' ? "Bicol University - (BUCET 2027)" : "Mock Test Configuration"}
+              </h1>
+              {params.id === 'upcat' ? (
+                <p className="text-lg font-semibold text-primary">
+                  August 1-2, 2026
+                </p>
+              ) : params.id === 'bu' ? (
+                <p className="text-lg font-semibold text-[#009cb8]">
+                  TBA
+                </p>
+              ) : null}
+            </div>
           </div>
           {params.id === 'upcat' && <UpcatCountdown />}
         </div>
@@ -1808,7 +1838,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                 {AVAILABLE_SUBJECTS.map((subject) => {
                   const isSelected = selectedSubjects[subject.id];
                   const hasTopics = (TOPIC_GROUPS[subject.id] ?? []).length > 0;
-                  const secsPerItem = SECONDS_PER_ITEM[subject.id] ?? 60;
+                  const secsPerItem = getSecondsPerItem(subject.id, params.id);
                   const subjectStats = getBankStats(params.id, subject.id);
 
                   return (

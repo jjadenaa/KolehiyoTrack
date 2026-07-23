@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -27,7 +27,8 @@ import { cn } from "@/lib/utils";
 import { CURRENT_VERSION, CHANGELOG_DATA } from "../config/changelog";
 
 const UNIVERSITIES = [
-  { id: 'upcat', name: 'University of the Philippines - (UPCAT 2027)' }
+  { id: 'upcat', name: 'University of the Philippines - (UPCAT 2027)' },
+  { id: 'bu', name: 'Bicol University - (BUCET 2027)' }
 ];
 
 export function Layout({ children, hideSidebar = false }: { children: React.ReactNode; hideSidebar?: boolean }) {
@@ -36,6 +37,23 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [location] = useLocation();
+
+  const [addedUniIds, setAddedUniIds] = useState<string[]>(() => {
+    const saved = localStorage.getItem("kolehiyotrack_added_universities");
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
+  useEffect(() => {
+    const handleSync = () => {
+      const saved = localStorage.getItem("kolehiyotrack_added_universities");
+      setAddedUniIds(saved ? JSON.parse(saved) : []);
+    };
+    window.addEventListener("kolehiyotrack_universities_changed", handleSync);
+    return () => window.removeEventListener("kolehiyotrack_universities_changed", handleSync);
+  }, []);
+
+  const filteredUniversities = UNIVERSITIES.filter(uni => addedUniIds.includes(uni.id));
 
   return (
     <div className="min-h-[100dvh] flex bg-background text-foreground overflow-hidden">
@@ -77,34 +95,103 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
               
               <div className="mt-8 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center justify-between">
                 <span>My Universities</span>
-                <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full" title="Add University">
-                  <Plus className="h-3 w-3" />
-                </Button>
+                <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-5 w-5 rounded-full cursor-pointer hover:bg-muted" title="Add University">
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center gap-2 text-lg font-bold">
+                        <Plus className="h-5 w-5 text-primary" />
+                        Add University
+                      </DialogTitle>
+                      <DialogDescription>
+                        Select a university to add to your list of active study goals.
+                      </DialogDescription>
+                    </DialogHeader>
+                    
+                    <div className="space-y-3 my-4">
+                      {UNIVERSITIES.map(uni => {
+                        const isAdded = addedUniIds.includes(uni.id);
+                        return (
+                          <div key={uni.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
+                            <div className="flex items-center gap-3">
+                              <img 
+                                src={uni.id === 'upcat' ? `${import.meta.env.BASE_URL}up-logo.png` : `${import.meta.env.BASE_URL}bu-logo.png`} 
+                                alt={`${uni.id.toUpperCase()} logo`} 
+                                className="h-10 w-10 object-contain" 
+                              />
+                              <div>
+                                <h4 className="text-sm font-bold text-foreground">{uni.id === 'upcat' ? 'UPCAT' : 'BUCET'}</h4>
+                                <p className="text-xs text-muted-foreground">{uni.id === 'upcat' ? 'August 1-2, 2026' : 'TBA'}</p>
+                              </div>
+                            </div>
+                            <Button 
+                              size="sm" 
+                              variant={isAdded ? "outline" : "default"}
+                              disabled={isAdded}
+                              onClick={() => {
+                                const newIds = [...addedUniIds, uni.id];
+                                setAddedUniIds(newIds);
+                                localStorage.setItem("kolehiyotrack_added_universities", JSON.stringify(newIds));
+                                window.dispatchEvent(new Event("kolehiyotrack_universities_changed"));
+                                setAddDialogOpen(false);
+                              }}
+                            >
+                              {isAdded ? "Added" : "Add"}
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </DialogContent>
+                </Dialog>
               </div>
               <nav className="space-y-1 px-2">
-                {UNIVERSITIES.map(uni => {
-                  const isUP = uni.id === 'upcat';
-                  const isActive = location === `/university/${uni.id}`;
-                  return (
-                    <Link key={uni.id} href={`/university/${uni.id}`}>
-                      <span className={cn(
-                        "flex items-start gap-3 rounded-md px-3 py-2.5 transition-all cursor-pointer shadow-sm border",
-                        isUP 
-                          ? "bg-[#7b1113] text-white border-[#921416] hover:bg-[#8c1315]" 
-                          : isActive
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent"
-                      )}>
-                        <img 
-                          src={`${import.meta.env.BASE_URL}up-logo.png`} 
-                          alt="UP logo" 
-                          className="h-5 w-5 shrink-0 object-contain mt-0.5" 
-                        />
-                        <span className="text-xs font-bold leading-normal break-words">{uni.name}</span>
-                      </span>
-                    </Link>
-                  );
-                })}
+                {filteredUniversities.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground/60 px-3 py-2 italic text-center">
+                    No universities added. Click "+" above to add.
+                  </p>
+                ) : (
+                  filteredUniversities.map(uni => {
+                    const isUP = uni.id === 'upcat';
+                    const isBU = uni.id === 'bu';
+                    const isActive = location === `/university/${uni.id}`;
+                    
+                    let itemClass = "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent";
+                    if (isUP) {
+                      itemClass = "bg-[#7b1113] text-white border-[#921416] hover:bg-[#8c1315]";
+                    } else if (isBU) {
+                      itemClass = "bg-[#009cb8] text-white border-[#00adc3] hover:bg-[#008ba5]";
+                    } else if (isActive) {
+                      itemClass = "bg-primary text-primary-foreground border-primary";
+                    }
+
+                    const logoSrc = isUP 
+                      ? `${import.meta.env.BASE_URL}up-logo.png` 
+                      : isBU 
+                        ? `${import.meta.env.BASE_URL}bu-logo.png` 
+                        : `${import.meta.env.BASE_URL}logo.png`;
+
+                    return (
+                      <Link key={uni.id} href={`/university/${uni.id}`}>
+                        <span className={cn(
+                          "flex items-start gap-3 rounded-md px-3 py-2.5 transition-all cursor-pointer shadow-sm border",
+                          itemClass
+                        )}>
+                          <img 
+                            src={logoSrc} 
+                            alt={`${uni.id.toUpperCase()} logo`} 
+                            className="h-5 w-5 shrink-0 object-contain mt-0.5" 
+                          />
+                          <span className="text-xs font-bold leading-normal break-words">{uni.name}</span>
+                        </span>
+                      </Link>
+                    );
+                  })
+                )}
               </nav>
             </div>
 

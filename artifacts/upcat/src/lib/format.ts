@@ -20,8 +20,8 @@ export const SUBJECT_LABELS: Record<string, string> = {
   reading_filipino: "Reading Comprehension (Filipino)",
 };
 
-// Seconds per item per subject type
-export const SECONDS_PER_ITEM: Record<string, number> = {
+// Seconds per item per subject type for UPCAT
+export const SECONDS_PER_ITEM_UPCAT: Record<string, number> = {
   language_english: 22,
   language_filipino: 22,
   math: 60,
@@ -30,14 +30,31 @@ export const SECONDS_PER_ITEM: Record<string, number> = {
   reading_filipino: 45,
 };
 
+// Seconds per item per subject type for BUCET
+export const SECONDS_PER_ITEM_BU: Record<string, number> = {
+  language_english: 60,
+  language_filipino: 60,
+  math: 66,
+  science: 45,
+  reading_english: 60,
+  reading_filipino: 60,
+};
+
+export function getSecondsPerItem(subject: string, universityId: string = "upcat"): number {
+  const perItemMap = universityId === "bu" ? SECONDS_PER_ITEM_BU : SECONDS_PER_ITEM_UPCAT;
+  return perItemMap[subject] ?? 60;
+}
+
 export function calcTotalSeconds(
   selectedSubjects: Record<string, boolean>,
-  itemCounts: Record<string, number>
+  itemCounts: Record<string, number>,
+  universityId: string = "upcat"
 ): number {
   return Object.entries(selectedSubjects)
     .filter(([, selected]) => selected)
     .reduce((total, [subj]) => {
-      const secs = SECONDS_PER_ITEM[subj] ?? 60;
+      const perItemMap = universityId === "bu" ? SECONDS_PER_ITEM_BU : SECONDS_PER_ITEM_UPCAT;
+      const secs = perItemMap[subj] ?? 60;
       return total + (itemCounts[subj] || 0) * secs;
     }, 0);
 }
