@@ -1895,15 +1895,28 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                     <span className="font-semibold text-foreground">{formatTime(totalSeconds)}</span>
                   </div>
                 </div>
-                <Button
-                  size="lg"
-                  className="w-full sm:w-auto font-semibold"
-                  onClick={handleStartTest}
-                  disabled={totalQuestions === 0 || bankStats.total === 0}
-                >
-                  <PlayCircle className="mr-2 h-5 w-5" />
-                  Start Test
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                  {(status === "running" || status === "ready") && questions.length > 0 ? (
+                    <Button
+                      size="lg"
+                      className="w-full sm:w-auto font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                      onClick={() => setLocation("/test")}
+                    >
+                      <PlayCircle className="mr-2 h-5 w-5" />
+                      Resume Active Test
+                    </Button>
+                  ) : null}
+                  <Button
+                    size="lg"
+                    variant={(status === "running" || status === "ready") && questions.length > 0 ? "outline" : "default"}
+                    className="w-full sm:w-auto font-semibold"
+                    onClick={handleStartTest}
+                    disabled={totalQuestions === 0 || bankStats.total === 0}
+                  >
+                    <PlayCircle className="mr-2 h-5 w-5" />
+                    {(status === "running" || status === "ready") && questions.length > 0 ? "Start New Test" : "Start Test"}
+                  </Button>
+                </div>
               </CardFooter>
             </Card>
 

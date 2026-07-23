@@ -65,12 +65,19 @@ export function TestProvider({ children }: { children: ReactNode }) {
   const lastActiveQuizSyncRef = useRef<number>(0);
   const internalStateChangeRef = useRef<boolean>(false);
 
-  const resetTest = useCallback(() => {
+  const resetTest = useCallback(async () => {
     setQuestions([]);
     setAnswers({});
     setTimeRemaining(0);
     setStatus("idle");
-  }, []);
+    if (user && universityId) {
+      try {
+        await deleteDoc(doc(db, "user_sessions", user.uid, "universities", universityId, "active_quiz", "current"));
+      } catch (err) {
+        // Ignore errors if document doesn't exist
+      }
+    }
+  }, [user, universityId]);
 
   // 1. REAL-TIME QUESTION BANK LISTENER
   useEffect(() => {
@@ -270,6 +277,7 @@ export function TestProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user || !universityId) return;
     if (internalStateChangeRef.current) return; // Skip if we just pulled this from remote
+    if (status === "idle") return; // Let resetTest handle clearing idle state
 
     syncActiveQuizToFirestore(status, questions, answers, timeRemaining);
   }, [status, questions, answers, user, universityId, syncActiveQuizToFirestore]);
