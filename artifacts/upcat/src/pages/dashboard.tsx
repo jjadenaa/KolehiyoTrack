@@ -375,13 +375,13 @@ export default function Dashboard() {
                       <div className="p-5 flex-1 flex flex-row items-center gap-4">
                         {uni.id === 'upcat' ? (
                           <img 
-                            src={`${import.meta.env.BASE_URL}images/up-logo.png`} 
+                            src={`${import.meta.env.BASE_URL}up-logo.png`} 
                             alt="UP logo" 
                             className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
                           />
                         ) : uni.id === 'bu' ? (
                           <img 
-                            src={`${import.meta.env.BASE_URL}images/bu-logo.png`} 
+                            src={`${import.meta.env.BASE_URL}bu-logo.png`} 
                             alt="BU logo" 
                             className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
                           />
@@ -520,13 +520,13 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3">
                     {uni.id === 'upcat' ? (
                       <img 
-                        src={`${import.meta.env.BASE_URL}images/up-logo.png`} 
+                        src={`${import.meta.env.BASE_URL}up-logo.png`} 
                         alt="UP logo" 
                         className="h-10 w-10 shrink-0 object-contain" 
                       />
                     ) : uni.id === 'bu' ? (
                       <img 
-                        src={`${import.meta.env.BASE_URL}images/bu-logo.png`} 
+                        src={`${import.meta.env.BASE_URL}bu-logo.png`} 
                         alt="BU logo" 
                         className="h-10 w-10 shrink-0 object-contain" 
                       />

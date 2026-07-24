@@ -114,7 +114,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                           <div key={uni.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                             <div className="flex items-center gap-3">
                               <img 
-                                src={uni.id === 'upcat' ? `${import.meta.env.BASE_URL}images/up-logo.png` : `${import.meta.env.BASE_URL}images/bu-logo.png`} 
+                                src={uni.id === 'upcat' ? `${import.meta.env.BASE_URL}up-logo.png` : `${import.meta.env.BASE_URL}bu-logo.png`} 
                                 alt={`${uni.id.toUpperCase()} logo`} 
                                 className="h-10 w-10 object-contain" 
                               />
@@ -164,9 +164,9 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                     }
 
                     const logoSrc = isUP 
-                      ? `${import.meta.env.BASE_URL}images/up-logo.png` 
+                      ? `${import.meta.env.BASE_URL}up-logo.png` 
                       : isBU 
-                        ? `${import.meta.env.BASE_URL}images/bu-logo.png` 
+                        ? `${import.meta.env.BASE_URL}bu-logo.png` 
                         : `${import.meta.env.BASE_URL}logo.png`;
 
                     return (
