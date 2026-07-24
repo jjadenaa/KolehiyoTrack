@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
+import { setLocalAddedUniversities } from "@/lib/userUniversities";
 
 interface AuthContextType {
   user: User | null;
@@ -69,6 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signOut(auth);
       
+      // Reset universities list for signed out session
+      setLocalAddedUniversities([]);
+      
       // Clear localStorage of any uploaded question banks and used history so they don't overlap
       const keysToClear: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -77,7 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           key.startsWith("iskolartrack_bank_") || 
           key.startsWith("iskolartrack_used_") ||
           key.startsWith("kolehiyotrack_bank_") ||
-          key.startsWith("kolehiyotrack_used_")
+          key.startsWith("kolehiyotrack_used_") ||
+          key === "kolehiyotrack_added_universities"
         )) {
           keysToClear.push(key);
         }

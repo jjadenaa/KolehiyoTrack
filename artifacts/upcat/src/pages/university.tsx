@@ -19,7 +19,7 @@ import {
   ArrowRight, History, PlayCircle, BookOpen, ChevronDown, ChevronUp,
   CheckCircle, XCircle, Clock, RotateCcw, Upload, Trash2, RefreshCw,
   AlertTriangle, Copy, FileText, Sparkles, Wand2, Calculator, Cloud, CloudOff,
-  ChevronLeft, ChevronRight, Gauge
+  ChevronLeft, ChevronRight, Gauge, ExternalLink
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -83,15 +83,27 @@ function NumberInput({
 
 function UpcatCountdown() {
   const daysLeft = useUpcatCountdown();
+  const isUrgent = daysLeft < 7;
 
   return (
-    <div className="flex items-center gap-3 bg-gradient-to-r from-primary/10 to-amber-500/10 border border-primary/20 rounded-lg px-4 py-3 w-fit">
-      <div className="flex items-center gap-2 text-primary">
-        <Clock className="h-5 w-5" />
-        <span className="text-2xl font-bold tabular-nums">{daysLeft}</span>
+    <div className={`flex items-center gap-3 border rounded-lg px-4 py-3 w-fit transition-all ${
+      isUrgent
+        ? "bg-rose-500/15 border-rose-500/60 ring-2 ring-rose-500/50 animate-pulse text-rose-700 dark:text-rose-300 shadow-md shadow-rose-500/20"
+        : "bg-gradient-to-r from-primary/10 to-amber-500/10 border-primary/20"
+    }`}>
+      <div className={`flex items-center gap-2 ${isUrgent ? "text-rose-600 dark:text-rose-400" : "text-primary"}`}>
+        <Clock className={`h-5 w-5 ${isUrgent ? "animate-spin [animation-duration:3s]" : ""}`} />
+        <span className="text-2xl font-extrabold tabular-nums">{daysLeft}</span>
       </div>
       <div className="text-sm">
-        <span className="font-semibold text-foreground">days remaining</span>
+        <span className={`font-semibold ${isUrgent ? "text-rose-700 dark:text-rose-300 font-bold" : "text-foreground"}`}>
+          days remaining
+        </span>
+        {isUrgent && (
+          <span className="block text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider mt-0.5">
+            ⚠️ Final Stretch! Less than 7 days left
+          </span>
+        )}
       </div>
     </div>
   );
@@ -882,6 +894,62 @@ function PromptGeneratorPanel({
     setError("");
     setResult(null);
     const text = jsonText.trim();
+    if (!text) return;
+
+    // ─── University Tag Validation ───
+    const targetUniCode = (universityId || "").toLowerCase();
+    const targetExamName = targetUniCode === "upcat" ? "UPCAT" : targetUniCode === "bu" ? "BUCET" : targetUniCode.toUpperCase();
+
+    const detectedUniTags = new Set<string>();
+
+    // Check JSON structure if valid JSON
+    try {
+      const parsed = JSON.parse(text);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          const tag = item?.university || item?.universityId || item?.exam;
+          if (typeof tag === "string" && tag.trim()) {
+            detectedUniTags.add(tag.trim());
+          }
+        }
+      }
+    } catch {
+      // Not JSON
+    }
+
+    // Check text format for UNIVERSITY: lines
+    const uniLines = text.match(/^UNIVERSITY:\s*(.+)$/gmi);
+    if (uniLines) {
+      for (const line of uniLines) {
+        const match = line.match(/^UNIVERSITY:\s*(.+)$/i);
+        if (match && match[1].trim()) {
+          detectedUniTags.add(match[1].trim());
+        }
+      }
+    }
+
+    if (detectedUniTags.size > 0) {
+      for (const rawTag of Array.from(detectedUniTags)) {
+        const tagUpper = rawTag.toUpperCase();
+        let detectedUniCode = "";
+        let detectedExamName = rawTag;
+
+        if (tagUpper.includes("UPCAT") || tagUpper === "UP" || tagUpper.includes("PHILIPPINES")) {
+          detectedUniCode = "upcat";
+          detectedExamName = "UPCAT";
+        } else if (tagUpper.includes("BUCET") || tagUpper === "BU" || tagUpper.includes("BICOL")) {
+          detectedUniCode = "bu";
+          detectedExamName = "BUCET";
+        }
+
+        if (detectedUniCode && detectedUniCode !== targetUniCode) {
+          setError(
+            `University Mismatch Error: You are trying to upload questions tagged for "${detectedExamName}" into the ${targetExamName} page. Please change "UNIVERSITY: ${rawTag}" to "UNIVERSITY: ${targetExamName}" in your text or paste so the system knows it belongs to ${targetExamName}, or switch to the ${detectedExamName} page to upload these questions.`
+          );
+          return;
+        }
+      }
+    }
 
     // Helper: try to parse as simple text format first, then JSON
     const tryParse = (): BankQuestion[] | null => {
@@ -1308,9 +1376,9 @@ function PromptGeneratorPanel({
               </div>
 
               {error && (
-                <div className="flex items-center gap-2 text-sm text-destructive bg-destructive/10 rounded p-3">
-                  <AlertTriangle className="h-4 w-4 shrink-0" />
-                  {error}
+                <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded p-3">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div className="whitespace-pre-wrap leading-relaxed">{error}</div>
                 </div>
               )}
 
@@ -1929,7 +1997,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                   {(status === "running" || status === "ready") && questions.length > 0 ? (
                     <Button
                       size="lg"
-                      className="w-full sm:w-auto font-semibold bg-emerald-600 hover:bg-emerald-700 text-white"
+                      className="w-full sm:w-auto font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer"
                       onClick={() => setLocation("/test")}
                     >
                       <PlayCircle className="mr-2 h-5 w-5" />
@@ -1939,7 +2007,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                   <Button
                     size="lg"
                     variant={(status === "running" || status === "ready") && questions.length > 0 ? "outline" : "default"}
-                    className="w-full sm:w-auto font-semibold"
+                    className="w-full sm:w-auto font-semibold transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer"
                     onClick={handleStartTest}
                     disabled={totalQuestions === 0 || bankStats.total === 0}
                   >

@@ -3,7 +3,7 @@ import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar, Trash2, Edit3 } from "lucide-react";
+import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar, Trash2, Edit3, ExternalLink } from "lucide-react";
 import { useUpcatCountdown } from "@/hooks/useCountdown";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -24,12 +24,14 @@ const UNIVERSITIES = [
     id: 'upcat', 
     name: 'University of the Philippines - (UPCAT 2027)', 
     date: 'August 1-2, 2026',
+    applyUrl: 'https://upcat.up.edu.ph/',
     description: ''
   },
   {
     id: 'bu',
     name: 'Bicol University - (BUCET 2027)',
     date: 'TBA',
+    applyUrl: 'https://ibu.bicol-u.edu.ph/sign-up?fbclid=IwY2xjawTQPAJwZG9mAWV4dG4DYWVtAjEwAGJyaWQRMUEzSHpab2JIZ3hWMUhXaWRzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeTjS04h49KzBzXXXEaiX2Da6cZA9L2zAs1TctSssit2Uj4g5iW7snT69yb04_aem_kbbDwP7cLHCmOLDVE3__dA',
     description: ''
   }
 ];
@@ -41,9 +43,19 @@ interface ApplicationTimeline {
   closeStr: string;
   openDate: Date;
   closeDate?: Date;
+  applyUrl: string;
 }
 
 const APPLICATION_TIMELINES: ApplicationTimeline[] = [
+  {
+    id: "upcat",
+    fullName: "University of the Philippines",
+    openStr: "May 2026",
+    closeStr: "May 31, 2026",
+    openDate: new Date("2026-05-01T00:00:00"),
+    closeDate: new Date("2026-05-31T23:59:59"),
+    applyUrl: "https://upcat.up.edu.ph/",
+  },
   {
     id: "admu",
     fullName: "Ateneo de Manila University",
@@ -51,6 +63,7 @@ const APPLICATION_TIMELINES: ApplicationTimeline[] = [
     closeStr: "August 24, 2026",
     openDate: new Date("2026-06-22T00:00:00"),
     closeDate: new Date("2026-08-24T23:59:59"),
+    applyUrl: "https://ateneo.admissions.ph/",
   },
   {
     id: "dlsu",
@@ -59,6 +72,7 @@ const APPLICATION_TIMELINES: ApplicationTimeline[] = [
     closeStr: "September 30, 2026",
     openDate: new Date("2026-07-15T00:00:00"),
     closeDate: new Date("2026-09-30T23:59:59"),
+    applyUrl: "https://applyarchershub.dlsu.edu.ph/ApplicationLandingPage/index/DLSU",
   },
   {
     id: "bu",
@@ -66,6 +80,7 @@ const APPLICATION_TIMELINES: ApplicationTimeline[] = [
     openStr: "July 23, 2026",
     closeStr: "TBA",
     openDate: new Date("2026-07-23T00:00:00"),
+    applyUrl: "https://ibu.bicol-u.edu.ph/sign-up?fbclid=IwY2xjawTQPAJwZG9mAWV4dG4DYWVtAjEwAGJyaWQRMUEzSHpab2JIZ3hWMUhXaWRzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeTjS04h49KzBzXXXEaiX2Da6cZA9L2zAs1TctSssit2Uj4g5iW7snT69yb04_aem_kbbDwP7cLHCmOLDVE3__dA",
   },
 ];
 
@@ -74,6 +89,7 @@ export default function Dashboard() {
   const upcatDaysLeft = useUpcatCountdown();
   const { user, loading: authLoading, signInWithGoogle } = useAuth();
   const [streak, setStreak] = useState(0);
+  const [hasPracticedToday, setHasPracticedToday] = useState(false);
   const [animateTrigger, setAnimateTrigger] = useState(0);
   const [dismissedWarning, setDismissedWarning] = useState(() => {
     return localStorage.getItem("kolehiyotrack_dismissed_auth_warning") === "true";
@@ -99,8 +115,8 @@ export default function Dashboard() {
 
   const visibleTimelines = APPLICATION_TIMELINES.filter((item) => {
     if (!item.closeDate) return true;
-    const threeDaysAfterClose = new Date(item.closeDate.getTime() + 3 * 24 * 60 * 60 * 1000);
-    return new Date() <= threeDaysAfterClose;
+    const sevenDaysAfterClose = new Date(item.closeDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+    return new Date() <= sevenDaysAfterClose;
   });
 
   useEffect(() => {
@@ -117,6 +133,7 @@ export default function Dashboard() {
           
           if (allSessions.length === 0) {
             setStreak(0);
+            setHasPracticedToday(false);
             return;
           }
 
@@ -133,8 +150,11 @@ export default function Dashboard() {
           const yesterdayDate = new Date(Date.now() - 86400000);
           const yesterdayStr = `${yesterdayDate.getFullYear()}-${String(yesterdayDate.getMonth()+1).padStart(2,'0')}-${String(yesterdayDate.getDate()).padStart(2,'0')}`;
           
+          const practicedToday = uniqueDates.includes(todayStr);
+          setHasPracticedToday(practicedToday);
+
           let expectedStr = todayStr;
-          if (uniqueDates.includes(todayStr)) {
+          if (practicedToday) {
             // expected is today
           } else if (uniqueDates.includes(yesterdayStr)) {
              expectedStr = yesterdayStr;
@@ -164,8 +184,11 @@ export default function Dashboard() {
       fetchStreak();
     } else {
       setStreak(0);
+      setHasPracticedToday(false);
     }
   }, [user]);
+
+  const isStreakAboutToEnd = Boolean(user && streak > 0 && !hasPracticedToday);
 
   const getFlameStyles = () => {
     if (!user || streak === 0) {
@@ -174,6 +197,14 @@ export default function Dashboard() {
         icon: "w-8 h-8",
         label: "Start your streak today!",
         badgeColor: "bg-muted text-muted-foreground text-[10px]"
+      };
+    }
+    if (isStreakAboutToEnd) {
+      return {
+        container: "bg-gradient-to-br from-rose-500 via-orange-500 to-red-600 text-white shadow-lg shadow-rose-500/50 animate-pulse ring-4 ring-rose-500/50",
+        icon: "w-8 h-8 drop-shadow-[0_2px_8px_rgba(244,63,94,0.7)] animate-bounce",
+        label: "🔥 Streak About to End!",
+        badgeColor: "bg-rose-600 text-white font-bold animate-pulse text-[10px]"
       };
     }
     if (streak >= 7) {
@@ -239,7 +270,11 @@ export default function Dashboard() {
           {/* Left Column: Daily Streak */}
           <div className="lg:col-span-1 space-y-4">
             <h2 className="text-2xl font-bold tracking-tight">Daily Streak</h2>
-            <Card className="border-2 border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/10 shadow-sm overflow-hidden relative">
+            <Card className={`border-2 shadow-sm overflow-hidden relative transition-all ${
+              isStreakAboutToEnd 
+                ? "border-rose-500/60 bg-rose-500/10 dark:bg-rose-950/40 ring-2 ring-rose-500/40 animate-pulse" 
+                : "border-orange-500/20 bg-orange-500/5 dark:bg-orange-500/10"
+            }`}>
               <CardContent className="p-5 flex flex-col items-center justify-center text-center space-y-3">
                 <div 
                   key={animateTrigger}
@@ -248,7 +283,7 @@ export default function Dashboard() {
                   <Flame className={flameStyle.icon} strokeWidth={1.5} />
                 </div>
                 {user ? (
-                  <div className="space-y-2">
+                  <div className="space-y-2 w-full">
                     <div className="space-y-1">
                       <div className="text-3xl font-bold tracking-tight text-foreground">
                         {streak}
@@ -260,6 +295,18 @@ export default function Dashboard() {
                     <Badge variant="secondary" className={`text-[10px] font-semibold py-0.5 px-2.5 ${flameStyle.badgeColor}`}>
                       {flameStyle.label}
                     </Badge>
+
+                    {isStreakAboutToEnd && (
+                      <div className="mt-3 p-3 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-700 dark:text-rose-300 text-xs font-medium space-y-1.5 animate-pulse shadow-sm">
+                        <div className="flex items-center justify-center gap-1.5 font-bold text-rose-600 dark:text-rose-400 text-xs">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          <span>Streak Ends Today!</span>
+                        </div>
+                        <p className="text-[11px] leading-tight text-muted-foreground dark:text-rose-200/90">
+                          You haven't practiced today. Complete a mock test before midnight to keep your <strong>{streak}-day streak</strong> alive!
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -290,19 +337,27 @@ export default function Dashboard() {
                   visibleTimelines.map((item) => {
                     const today = new Date();
                     const hasOpened = today >= item.openDate;
-                    
+                    const daysUntilClose = item.closeDate ? Math.ceil((item.closeDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                    const isClosingSoon = daysUntilClose !== null && daysUntilClose <= 7 && daysUntilClose >= 0;
+
                     return (
-                      <div key={item.id} className="p-3 rounded-lg border bg-muted/10 border-muted-foreground/10 space-y-2">
+                      <div key={item.id} className={`p-3 rounded-lg border bg-muted/10 space-y-2 transition-all ${
+                        isClosingSoon ? "border-rose-500/50 ring-1 ring-rose-500/30 bg-rose-500/5" : "border-muted-foreground/10"
+                      }`}>
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
                             {item.id.toUpperCase()}
                           </span>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${
-                            hasOpened 
+                            isClosingSoon
+                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40 animate-pulse"
+                              : hasOpened 
                               ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" 
                               : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
                           }`}>
-                            {hasOpened ? "Applications Open" : "Opening Soon"}
+                            {isClosingSoon 
+                              ? `Closing in ${daysUntilClose} ${daysUntilClose === 1 ? 'day' : 'days'}!` 
+                              : hasOpened ? "Applications Open" : "Opening Soon"}
                           </span>
                         </div>
                         <p className="text-xs font-semibold text-muted-foreground">
@@ -318,6 +373,21 @@ export default function Dashboard() {
                             <span className="font-semibold text-foreground">{item.closeStr}</span>
                           </div>
                         </div>
+                        {item.applyUrl && (
+                          <div className="pt-2 border-t border-muted/30">
+                            <a
+                              href={item.applyUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block w-full"
+                            >
+                              <Button size="sm" variant="outline" className="w-full gap-1.5 text-xs font-semibold h-8 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer">
+                                Apply Now
+                                <ExternalLink className="h-3.5 w-3.5" />
+                              </Button>
+                            </a>
+                          </div>
+                        )}
                       </div>
                     );
                   })
@@ -362,7 +432,7 @@ export default function Dashboard() {
                       Select universities you want to prepare for to start studying.
                     </CardDescription>
                   </div>
-                  <Button onClick={() => setAddDialogOpen(true)} className="gap-2 font-semibold">
+                  <Button onClick={() => setAddDialogOpen(true)} className="gap-2 font-semibold transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer">
                     <Plus className="h-4 w-4" />
                     Add a University
                   </Button>
@@ -397,9 +467,16 @@ export default function Dashboard() {
                               {uni.date || "TBA"}
                             </p>
                             {uni.id === 'upcat' ? (
-                              <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
-                                <Clock className="h-3 w-3 text-rose-500 animate-pulse" />
-                                <span className="text-xs">{upcatDaysLeft} days remaining</span>
+                              <Badge 
+                                variant="outline" 
+                                className={`gap-1.5 shadow-sm py-1 transition-all ${
+                                  upcatDaysLeft < 7 
+                                    ? "animate-pulse ring-2 ring-rose-500/60 border-rose-500 bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold shadow-rose-500/20" 
+                                    : "bg-background"
+                                }`}
+                              >
+                                <Clock className={`h-3 w-3 ${upcatDaysLeft < 7 ? "text-rose-500 animate-spin [animation-duration:3s]" : "text-rose-500 animate-pulse"}`} />
+                                <span className="text-xs">{upcatDaysLeft} days remaining {upcatDaysLeft < 7 && "⚠️"}</span>
                               </Badge>
                             ) : uni.date ? (
                               <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
@@ -437,7 +514,7 @@ export default function Dashboard() {
                           <Link href={`/university/${uni.id}`} className="w-full">
                             <Button 
                               size="default" 
-                              className="w-full gap-2 text-sm h-10 font-semibold shadow-sm"
+                              className="w-full gap-2 text-sm h-10 font-semibold shadow-sm transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer"
                             >
                               Study Now
                               <ArrowRight className="h-4 w-4" />
