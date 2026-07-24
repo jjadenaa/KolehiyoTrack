@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { getLocalAddedUniversities, subscribeUserAddedUniversities, saveUserAddedUniversities } from "@/lib/userUniversities";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -38,20 +39,14 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
   const [changelogOpen, setChangelogOpen] = useState(false);
   const [location] = useLocation();
 
-  const [addedUniIds, setAddedUniIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem("kolehiyotrack_added_universities");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [addedUniIds, setAddedUniIds] = useState<string[]>(() => getLocalAddedUniversities());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   useEffect(() => {
-    const handleSync = () => {
-      const saved = localStorage.getItem("kolehiyotrack_added_universities");
-      setAddedUniIds(saved ? JSON.parse(saved) : []);
-    };
-    window.addEventListener("kolehiyotrack_universities_changed", handleSync);
-    return () => window.removeEventListener("kolehiyotrack_universities_changed", handleSync);
-  }, []);
+    return subscribeUserAddedUniversities(user, (ids) => {
+      setAddedUniIds(ids);
+    });
+  }, [user]);
 
   const filteredUniversities = UNIVERSITIES.filter(uni => addedUniIds.includes(uni.id));
 
@@ -119,7 +114,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                           <div key={uni.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                             <div className="flex items-center gap-3">
                               <img 
-                                src={uni.id === 'upcat' ? `${import.meta.env.BASE_URL}up-logo.png` : `${import.meta.env.BASE_URL}bu-logo.png`} 
+                                src={uni.id === 'upcat' ? `${import.meta.env.BASE_URL}images/up-logo.png` : `${import.meta.env.BASE_URL}images/bu-logo.png`} 
                                 alt={`${uni.id.toUpperCase()} logo`} 
                                 className="h-10 w-10 object-contain" 
                               />
@@ -135,8 +130,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                               onClick={() => {
                                 const newIds = [...addedUniIds, uni.id];
                                 setAddedUniIds(newIds);
-                                localStorage.setItem("kolehiyotrack_added_universities", JSON.stringify(newIds));
-                                window.dispatchEvent(new Event("kolehiyotrack_universities_changed"));
+                                saveUserAddedUniversities(user, newIds);
                                 setAddDialogOpen(false);
                               }}
                             >
@@ -170,9 +164,9 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                     }
 
                     const logoSrc = isUP 
-                      ? `${import.meta.env.BASE_URL}up-logo.png` 
+                      ? `${import.meta.env.BASE_URL}images/up-logo.png` 
                       : isBU 
-                        ? `${import.meta.env.BASE_URL}bu-logo.png` 
+                        ? `${import.meta.env.BASE_URL}images/bu-logo.png` 
                         : `${import.meta.env.BASE_URL}logo.png`;
 
                     return (

@@ -50,13 +50,23 @@ export function TestProvider({ children }: { children: ReactNode }) {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [answers, setAnswers] = useState<Record<string, SessionAnswer>>({});
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const [status, setStatus] = useState<"idle" | "ready" | "running" | "finished">("idle");
+  const [status, setStatusState] = useState<"idle" | "ready" | "running" | "finished">("idle");
   const [lastSession, setLastSession] = useState<Session | null>(null);
   
   // Real-time states
   const [pastSessions, setPastSessions] = useState<Session[]>([]);
   const [sessionsLoaded, setSessionsLoaded] = useState<boolean>(false);
   const [bankTrigger, setBankTrigger] = useState<number>(0);
+
+  // Synchronous status ref and timestamp of last local mutation to prevent snapshot race conditions
+  const statusRef = useRef<"idle" | "ready" | "running" | "finished">("idle");
+  const lastLocalActionTimeRef = useRef<number>(0);
+
+  const setStatus = useCallback((newStatus: "idle" | "ready" | "running" | "finished") => {
+    statusRef.current = newStatus;
+    lastLocalActionTimeRef.current = Date.now();
+    setStatusState(newStatus);
+  }, []);
 
   // Generate a random device identifier to identify this browser/tab session and avoid infinite write loops
   const deviceId = useMemo(() => Math.random().toString(36).substring(2, 15), []);
@@ -66,10 +76,12 @@ export function TestProvider({ children }: { children: ReactNode }) {
   const internalStateChangeRef = useRef<boolean>(false);
 
   const resetTest = useCallback(async () => {
+    statusRef.current = "idle";
+    lastLocalActionTimeRef.current = Date.now();
     setQuestions([]);
     setAnswers({});
     setTimeRemaining(0);
-    setStatus("idle");
+    setStatusState("idle");
     if (user && universityId) {
       try {
         await deleteDoc(doc(db, "user_sessions", user.uid, "universities", universityId, "active_quiz", "current"));
@@ -181,10 +193,6 @@ export function TestProvider({ children }: { children: ReactNode }) {
     return () => unsub();
   }, [user, universityId]);
 
-  // Keep track of current status for the snapshot listener without adding it to dependencies
-  const statusRef = useRef(status);
-  useEffect(() => { statusRef.current = status; }, [status]);
-
   // 3. REAL-TIME ACTIVE QUIZ PROGRESS LISTENER (REMOTE TO LOCAL)
   useEffect(() => {
     if (!user || !universityId) return;
@@ -193,9 +201,9 @@ export function TestProvider({ children }: { children: ReactNode }) {
 
     const unsub = onSnapshot(activeQuizDocRef, (snap) => {
       if (!snap.exists()) {
-        // If doc is deleted, but we are running, let's see if we should reset to idle (meaning finished or aborted elsewhere)
-        // Only trigger if we aren't the one who initiated/reset the test locally
-        if (statusRef.current !== "idle" && statusRef.current !== "finished" && !internalStateChangeRef.current) {
+        // If doc is deleted, ignore if local action occurred recently or status is idle/finished
+        const recentLocalAction = Date.now() - lastLocalActionTimeRef.current < 5000;
+        if (statusRef.current !== "idle" && statusRef.current !== "finished" && !internalStateChangeRef.current && !recentLocalAction) {
           console.log("[Realtime Active Quiz] Remote active quiz was deleted. Setting local status to idle.");
           resetTest();
         }

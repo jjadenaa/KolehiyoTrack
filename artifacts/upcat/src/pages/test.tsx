@@ -110,6 +110,7 @@ export default function TestPage() {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [initialTime] = useState(timeRemaining);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
 
   const timerRef = useRef<number | null>(null);
   const timeRef = useRef<number>(timeRemaining);
@@ -121,7 +122,11 @@ export default function TestPage() {
 
   useEffect(() => { timeRef.current = timeRemaining; }, [timeRemaining]);
   useEffect(() => {
-    if ((status !== "running" && status !== "ready") || questions.length === 0) { setLocation("/"); return; }
+    if (submitting || submittingRef.current || status === "finished") return;
+    if ((status !== "running" && status !== "ready") || questions.length === 0) {
+      setLocation(`/university/${universityId || "upcat"}`);
+      return;
+    }
     if (status !== "running") return;
     timerRef.current = window.setInterval(() => {
       const next = timeRef.current - 1;
@@ -129,10 +134,11 @@ export default function TestPage() {
       else { setTimeRemaining(next); }
     }, 1000);
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [status, questions.length]);
+  }, [status, questions.length, submitting, universityId]);
 
   const handleManualSubmit = async () => {
-    if (submitting) return;
+    if (submitting || submittingRef.current) return;
+    submittingRef.current = true;
     setShowSubmitConfirm(false);
     setSubmitting(true);
     setStatus("finished");
@@ -195,8 +201,9 @@ export default function TestPage() {
   };
 
   const handleExit = () => {
+    submittingRef.current = true;
     resetTest();
-    setLocation(`/university/${universityId}`);
+    setLocation(`/university/${universityId || "upcat"}`);
   };
 
   if (questions.length === 0) return null;

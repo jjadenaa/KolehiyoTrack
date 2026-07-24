@@ -1687,13 +1687,13 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             {params.id === 'upcat' ? (
               <img 
-                src={`${import.meta.env.BASE_URL}up-logo.png`} 
+                src={`${import.meta.env.BASE_URL}images/up-logo.png`} 
                 alt="UP logo" 
                 className="h-16 w-16 shrink-0 object-contain" 
               />
             ) : params.id === 'bu' ? (
               <img 
-                src={`${import.meta.env.BASE_URL}bu-logo.png`} 
+                src={`${import.meta.env.BASE_URL}images/bu-logo.png`} 
                 alt="BU logo" 
                 className="h-16 w-16 shrink-0 object-contain" 
               />

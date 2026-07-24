@@ -8,6 +8,7 @@ import { useUpcatCountdown } from "@/hooks/useCountdown";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
+import { getLocalAddedUniversities, subscribeUserAddedUniversities, saveUserAddedUniversities } from "@/lib/userUniversities";
 import { listSessions } from "@/lib/firestoreSessions";
 import {
   Dialog,
@@ -78,21 +79,15 @@ export default function Dashboard() {
     return localStorage.getItem("kolehiyotrack_dismissed_auth_warning") === "true";
   });
 
-  const [addedUniIds, setAddedUniIds] = useState<string[]>(() => {
-    const saved = localStorage.getItem("kolehiyotrack_added_universities");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [addedUniIds, setAddedUniIds] = useState<string[]>(() => getLocalAddedUniversities());
   const [isEditMode, setIsEditMode] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
 
   useEffect(() => {
-    const handleSync = () => {
-      const saved = localStorage.getItem("kolehiyotrack_added_universities");
-      setAddedUniIds(saved ? JSON.parse(saved) : []);
-    };
-    window.addEventListener("kolehiyotrack_universities_changed", handleSync);
-    return () => window.removeEventListener("kolehiyotrack_universities_changed", handleSync);
-  }, []);
+    return subscribeUserAddedUniversities(user, (ids) => {
+      setAddedUniIds(ids);
+    });
+  }, [user]);
 
   const filteredUniversities = UNIVERSITIES.filter(uni => addedUniIds.includes(uni.id));
 
@@ -216,8 +211,7 @@ export default function Dashboard() {
   const handleRemoveUniversity = (id: string) => {
     const newIds = addedUniIds.filter(uniId => uniId !== id);
     setAddedUniIds(newIds);
-    localStorage.setItem("kolehiyotrack_added_universities", JSON.stringify(newIds));
-    window.dispatchEvent(new Event("kolehiyotrack_universities_changed"));
+    saveUserAddedUniversities(user, newIds);
     toast({
       title: "University Removed",
       description: "University has been removed from your list of active study goals.",
@@ -381,13 +375,13 @@ export default function Dashboard() {
                       <div className="p-5 flex-1 flex flex-row items-center gap-4">
                         {uni.id === 'upcat' ? (
                           <img 
-                            src={`${import.meta.env.BASE_URL}up-logo.png`} 
+                            src={`${import.meta.env.BASE_URL}images/up-logo.png`} 
                             alt="UP logo" 
                             className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
                           />
                         ) : uni.id === 'bu' ? (
                           <img 
-                            src={`${import.meta.env.BASE_URL}bu-logo.png`} 
+                            src={`${import.meta.env.BASE_URL}images/bu-logo.png`} 
                             alt="BU logo" 
                             className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
                           />
@@ -526,13 +520,13 @@ export default function Dashboard() {
                   <div className="flex items-center gap-3">
                     {uni.id === 'upcat' ? (
                       <img 
-                        src={`${import.meta.env.BASE_URL}up-logo.png`} 
+                        src={`${import.meta.env.BASE_URL}images/up-logo.png`} 
                         alt="UP logo" 
                         className="h-10 w-10 shrink-0 object-contain" 
                       />
                     ) : uni.id === 'bu' ? (
                       <img 
-                        src={`${import.meta.env.BASE_URL}bu-logo.png`} 
+                        src={`${import.meta.env.BASE_URL}images/bu-logo.png`} 
                         alt="BU logo" 
                         className="h-10 w-10 shrink-0 object-contain" 
                       />
@@ -554,8 +548,7 @@ export default function Dashboard() {
                     onClick={() => {
                       const newIds = [...addedUniIds, uni.id];
                       setAddedUniIds(newIds);
-                      localStorage.setItem("kolehiyotrack_added_universities", JSON.stringify(newIds));
-                      window.dispatchEvent(new Event("kolehiyotrack_universities_changed"));
+                      saveUserAddedUniversities(user, newIds);
                       toast({
                         title: "University Added",
                         description: `${uni.id === 'upcat' ? 'UPCAT' : 'BUCET'} has been added to your universities.`,
