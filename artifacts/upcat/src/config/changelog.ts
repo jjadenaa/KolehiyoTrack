@@ -9,10 +9,20 @@ export interface ChangelogItem {
 }
 
 // 1. Change your global version number here
-export const CURRENT_VERSION = "v0.2.0 Beta";
+export const CURRENT_VERSION = "v0.2.1 Beta";
 
 // 2. Add or update release notes here (newest first)
 export const CHANGELOG_DATA: ChangelogItem[] = [
+  {
+    version: "v0.2.0",
+    date: "July 26, 2026",
+    changes: [
+      {
+        title: "Added better table support, Bug fixes + More",
+        description: "Added better looks for questions that uses tables, added more animations, several bug fixes "
+      }
+    ]
+  },
   {
     version: "v0.2.0",
     date: "July 24, 2026",
