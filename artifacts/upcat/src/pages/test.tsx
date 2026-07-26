@@ -8,7 +8,7 @@ import { formatTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { markQuestionsUsed } from "@/lib/questionBank";
+import { markQuestionsUsed, getPassageId } from "@/lib/questionBank";
 import { ChevronLeft, ChevronRight, XCircle } from "lucide-react";
 import { SmartText } from "@/components/SmartText";
 import { DiagramRenderer } from "@/components/DiagramRenderer";
@@ -59,24 +59,27 @@ function buildPages(questions: any[]): TestPage[] {
   let passageCounter = 0;
   while (i < questions.length) {
     const q = questions[i];
-    if (q.passageId || (q.subject.startsWith("reading_") && q.text.startsWith("PASSAGE:"))) {
-      const passageId = q.passageId || "p" + i;
+    const pid = getPassageId(q);
+    if (pid || (q.subject?.startsWith("reading_") && q.text?.startsWith("PASSAGE:"))) {
+      const passageId = pid || "p" + i;
       passageCounter++;
       const passageQuestions: any[] = [q];
       let j = i + 1;
       while (j < questions.length) {
         const nextQ = questions[j];
-        const nextPassageId = nextQ.passageId || (nextQ.subject.startsWith("reading_") && nextQ.text.startsWith("PASSAGE:") ? "p" + j : null);
-        if (nextPassageId === passageId) {
+        const nextPid = getPassageId(nextQ);
+        const nextPassageId = nextPid || (nextQ.subject?.startsWith("reading_") && nextQ.text?.startsWith("PASSAGE:") ? "p" + j : null);
+        if (nextPassageId && nextPassageId === passageId) {
           passageQuestions.push(nextQ);
           j++;
         } else {
           break;
         }
       }
-      const { passage } = parsePassage(q.text);
-      const passageText = passage || q.text;
+      const { passage: firstPassageText } = parsePassage(q.text);
       passageQuestions.forEach((pq, idx) => {
+        const { passage: pqPassageText } = parsePassage(pq.text);
+        const passageText = pqPassageText || firstPassageText || pq.text;
         pages.push({
           type: "passage",
           passage: passageText,

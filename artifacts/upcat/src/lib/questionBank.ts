@@ -75,14 +75,14 @@ export function resetUsedIds(uniId: string): void {
   setBankUpdatedAt(uniId, Date.now());
 }
 
-function getPassageId(q: BankQuestion): string | null {
-  if (q.subject.startsWith("reading_") && q.passageId) {
+export function getPassageId(q: BankQuestion): string | null {
+  if (q.passageId) {
     return q.passageId;
   }
-  if (q.subject.startsWith("reading_") && q.text.startsWith("PASSAGE:")) {
+  if (q.subject && q.subject.startsWith("reading_") && q.text && q.text.startsWith("PASSAGE:")) {
     const match = q.text.match(/^PASSAGE:\s*\n?([\s\S]*?)\n?\nQUESTION:/i);
     if (match) {
-      const passageHash = match[1].trim().slice(0, 80);
+      const passageHash = match[1].trim().slice(0, 100);
       return passageHash;
     }
   }

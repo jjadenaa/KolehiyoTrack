@@ -1142,25 +1142,47 @@ function PromptGeneratorPanel({
         if (currentBlockTopic !== "") persistentTopic = currentBlockTopic;
         if (hasExplicitPassage) persistentPassage = currentBlockPassage;
 
-        const subject = currentBlockSubject || persistentSubject;
+        let subject = currentBlockSubject || persistentSubject;
         const topic = currentBlockTopic || persistentTopic;
         const passage = hasExplicitPassage ? currentBlockPassage : persistentPassage;
 
-        if (!id || !subject || choices.length < 2) continue;
+        // Skip blocks that don't contain any choices (e.g. standalone PASSAGE: blocks)
+        if (choices.length < 2) continue;
+
+        // Auto-generate ID if missing
+        if (!id) {
+          id = `q_custom_${Date.now()}_${blockIdx}_${Math.floor(Math.random() * 1000)}`;
+        }
+
+        // Fallback subject if missing
+        if (!subject) {
+          const combinedText = `${passage} ${question}`.toLowerCase();
+          const isFilipino = /\b(ang|ng|mga|sa|na|si|ni|kay|ako|ikaw|siya|kami|tayo|kayo|sila|ito|iyan|iyon|dito|diyan|doon|mula|para|dahil|kung|kapag|nang|ipaliwanag|suriin|talahanayan|rehiyon|tanong)\b/i.test(combinedText);
+          if (passage) {
+            subject = isFilipino ? "reading_filipino" : "reading_english";
+          } else {
+            subject = isFilipino ? "language_filipino" : "general";
+          }
+        }
 
         // Map human-readable subject names to internal IDs
         const subjectMap: Record<string, string> = {
           "READING FILIPINO": "reading_filipino",
           "READING ENGLISH": "reading_english",
+          "READING_FILIPINO": "reading_filipino",
+          "READING_ENGLISH": "reading_english",
           "LANGUAGE FILIPINO": "language_filipino",
           "LANGUAGE ENGLISH": "language_english",
+          "LANGUAGE_FILIPINO": "language_filipino",
+          "LANGUAGE_ENGLISH": "language_english",
           "FILIPINO LANGUAGE": "language_filipino",
           "ENGLISH LANGUAGE": "language_english",
           "MATHEMATICS": "math",
           "MATH": "math",
           "SCIENCE": "science",
+          "GENERAL": "general",
         };
-        const subjectKey = subject.toUpperCase();
+        const subjectKey = subject.trim().toUpperCase();
         const mappedSubject = subjectMap[subjectKey] || subject.toLowerCase().replace(/\s+/g, "_");
 
         // Build text field
@@ -1179,14 +1201,15 @@ function PromptGeneratorPanel({
         // so questions with the same passage share the same ID and group together
         let passageId: string | undefined = undefined;
         if (passage) {
-          if (passage === lastPassageText) {
+          const normPassage = passage.trim().slice(0, 100);
+          if (normPassage === lastPassageText) {
             // Same passage as previous question, reuse current ID
             passageId = `p${currentPassageId}`;
           } else {
             // New passage, increment ID
             currentPassageId++;
             passageId = `p${currentPassageId}`;
-            lastPassageText = passage;
+            lastPassageText = normPassage;
           }
         }
 
@@ -1197,7 +1220,7 @@ function PromptGeneratorPanel({
           text,
           passageId,
           choices,
-          correctAnswer: correctAnswer.toUpperCase(),
+          correctAnswer: (correctAnswer || choices[0]?.id || "A").toUpperCase(),
           explanation: explanation || "",
         };
         if (diagram) q.diagram = diagram;
