@@ -1038,7 +1038,7 @@ function PromptGeneratorPanel({
             i++;
           } else if (upper.startsWith("PASSAGE:")) {
             hasExplicitPassage = true;
-            // Collect multi-line passage until QUESTION: or A) or end of block
+            // Collect multi-line passage until QUESTION: or choice or end of block
             const start = line.startsWith("PASSAGE:") ? line.slice(8).trim() : "";
             const passageLines: string[] = start ? [start] : [];
             i++;
@@ -1047,11 +1047,13 @@ function PromptGeneratorPanel({
               const nextUpper = next.toUpperCase();
               if (
                 nextUpper.startsWith("QUESTION:") ||
-                nextUpper.startsWith("A)") ||
-                nextUpper.startsWith("A.") ||
+                /^[A-D][).]\s*/.test(next) ||
                 nextUpper.startsWith("CORRECT:") ||
                 nextUpper.startsWith("EXPLANATION:") ||
-                nextUpper.startsWith("ID:")
+                nextUpper.startsWith("ID:") ||
+                nextUpper.startsWith("UNIVERSITY:") ||
+                nextUpper.startsWith("SUBJECT:") ||
+                nextUpper.startsWith("TOPIC:")
               ) {
                 break;
               }
@@ -1067,12 +1069,15 @@ function PromptGeneratorPanel({
               const next = lines[i];
               const nextUpper = next.toUpperCase();
               if (
-                nextUpper.startsWith("A)") ||
-                nextUpper.startsWith("A.") ||
-                nextUpper.startsWith("1.") ||
+                /^[A-D][).]\s*/.test(next) ||
                 nextUpper.startsWith("CORRECT:") ||
                 nextUpper.startsWith("EXPLANATION:") ||
-                nextUpper.startsWith("ID:")
+                nextUpper.startsWith("ID:") ||
+                nextUpper.startsWith("UNIVERSITY:") ||
+                nextUpper.startsWith("SUBJECT:") ||
+                nextUpper.startsWith("TOPIC:") ||
+                nextUpper.startsWith("DIAGRAM:") ||
+                nextUpper.startsWith("PASSAGE:")
               ) {
                 break;
               }
