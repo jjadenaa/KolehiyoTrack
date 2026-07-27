@@ -804,14 +804,20 @@ function PromptGeneratorPanel({
         parts.push(`    \"show\": [\"vertices\", \"sides\", \"angles\", \"rightAngleMark\"]  // what to display`);
         parts.push(`  }`);
         parts.push("");
-        parts.push("DIAGRAM RULES:");
+        parts.push("DIAGRAM RULES & FORMATTING:");
         parts.push("- \"shape\": exact shape name from the list above.");
-        parts.push("- \"vertices\": letters in order around the shape.");
-        parts.push("- \"sides\": use vertex-pair names (AB, BC) or generic (a, b, c, base, equal).");
-        parts.push("- Use \"?\" for any side the student must calculate.");
-        parts.push("- \"angles\": vertex letter as key, value with degree sign (e.g. \"30°\").");
+        parts.push("- \"vertices\": letters in order around the shape (e.g. [\"A\", \"B\", \"C\"]).");
+        parts.push("- \"sides\": use vertex-pair names matching vertices (e.g. {\"AB\":\"5\", \"BC\":\"12\", \"AC\":\"?\"}) or generic keys ({\"a\":\"5\", \"b\":\"12\"}).");
+        parts.push("- Use \"?\" for any side or hypotenuse the student must calculate.");
+        parts.push("- \"angles\": vertex letter as key, value with degree sign or symbol (e.g. {\"C\":\"30°\"} or {\"C\":\"θ\"}). Use numeric IDs for angles (e.g., \"1\", \"2\") when dealing with transversals.");
         parts.push("- \"show\": [\"vertices\", \"sides\", \"angles\", \"rightAngleMark\", \"heightDashed\"].");
-        parts.push("- If the question has no shape, OMIT the \"diagram\" field entirely.");
+        parts.push("- Internal Lines: Tell me if the shape needs a \"diagonal\", \"median\", or \"altitude\". For example, in a triangle, specify \"altitude to the hypotenuse\".");
+        parts.push("- Zig-Zag / Multiple Transversals: For parallel line problems, specify if it is a single transversal or a \"zig-zag\" line (like an 'M' or 'Z' shape) between the parallel lines.");
+        parts.push("- Point Intersections: If lines are concurrent (meeting at a single point), label that vertex \"O\" or \"P\".");
+        parts.push("- Shaded Regions: Specify if the question asks for the \"shaded area\" or the \"unshaded area\" of composite figures (like a circle inside a square).");
+        parts.push("- Expanded Topics to Include: Parallel Lines & Transversals, Trapezoid Properties (median, diagonals), Complex Circle Geometry (chords, secants, tangents), Similar Triangles, Inscribed Figures.");
+        parts.push("- Do NOT wrap plain numbers or decimals in dollar signs like $$0.000045$$ — write them as plain text or standard $0.000045$.");
+        parts.push("- If the question has no geometric shape, OMIT the \"diagram\" field / DIAGRAM: line entirely.");
         parts.push("");
       }
 

@@ -163,7 +163,7 @@ export default function ReviewPage() {
                 <CardContent className="p-5 space-y-4">
                   {/* Question text */}
                   <SmartText text={answer.questionText} className="text-base" />
-                  <DiagramRenderer diagram={answer.diagram} />
+                  <DiagramRenderer diagram={answer.diagram} questionText={answer.questionText} />
 
                   {/* Choices */}
                   <div className="space-y-2">

@@ -99,25 +99,31 @@ function parseContentBlocks(text: string): ContentBlock[] {
   while (i < lines.length) {
     const line = lines[i];
 
-    // 1. Check for Table block
+    // 1. Check for Table block (must contain a separator line like |---|---|)
     if (isTableLine(line)) {
-      const tableLines: string[] = [];
-      while (i < lines.length && (isTableLine(lines[i]) || isSeparatorLine(lines[i]))) {
-        tableLines.push(lines[i]);
-        i++;
+      let j = i;
+      const candidateLines: string[] = [];
+      let hasSeparator = false;
+      while (j < lines.length && (isTableLine(lines[j]) || isSeparatorLine(lines[j]))) {
+        if (isSeparatorLine(lines[j])) {
+          hasSeparator = true;
+        }
+        candidateLines.push(lines[j]);
+        j++;
       }
-      const parsedTable = parseTableLines(tableLines);
-      if (parsedTable && (parsedTable.headers.length > 1 || parsedTable.rows.length > 0)) {
-        blocks.push({
-          type: 'table',
-          headers: parsedTable.headers,
-          rows: parsedTable.rows
-        });
-      } else {
-        // Fallback to text if table parsing wasn't valid
-        blocks.push({ type: 'text', text: tableLines.join("\n") });
+
+      if (hasSeparator) {
+        const parsedTable = parseTableLines(candidateLines);
+        if (parsedTable && (parsedTable.headers.length > 0)) {
+          blocks.push({
+            type: 'table',
+            headers: parsedTable.headers,
+            rows: parsedTable.rows
+          });
+          i = j;
+          continue;
+        }
       }
-      continue;
     }
 
     // 2. Check for Mono/Diagram block
@@ -135,7 +141,15 @@ function parseContentBlocks(text: string): ContentBlock[] {
     const textLines: string[] = [];
     while (
       i < lines.length &&
-      !isTableLine(lines[i]) &&
+      !(isTableLine(lines[i]) && lines.slice(i).some((l, idx) => {
+        let k = i;
+        let foundSep = false;
+        while (k < lines.length && (isTableLine(lines[k]) || isSeparatorLine(lines[k]))) {
+          if (isSeparatorLine(lines[k])) foundSep = true;
+          k++;
+        }
+        return foundSep;
+      })) &&
       !isDiagramLine(lines[i])
     ) {
       textLines.push(lines[i]);
@@ -155,7 +169,6 @@ function parseContentBlocks(text: string): ContentBlock[] {
  */
 function isValidMath(math: string): boolean {
   if (math.includes('\n')) return false;
-  if (/^\s*\d+([.,]\d+)?\s*$/.test(math)) return false;
 
   const words = math.toLowerCase().split(/\s+/);
   const commonWords = [
@@ -177,14 +190,16 @@ function RichText({ text }: { text: string }) {
     <>
       {parts.map((part, i) => {
         if (part.startsWith('$$') && part.endsWith('$$')) {
-          const math = part.slice(2, -2);
+          const math = part.slice(2, -2).replace(/^\$+|\$+$/g, '').trim();
           return <MathElement key={i} math={math} displayMode={true} />;
         }
         if (part.startsWith('$') && part.endsWith('$')) {
-          const math = part.slice(1, -1);
+          const math = part.slice(1, -1).replace(/^\$+|\$+$/g, '').trim();
           if (isValidMath(math)) {
             return <MathElement key={i} math={math} displayMode={false} />;
           }
+          // If isValidMath fails, render the inner string without surrounding $
+          return <span key={i}>{math}</span>;
         }
         
         const boldParts = part.split(/(\*\*[\s\S]*?\*\*)/g);

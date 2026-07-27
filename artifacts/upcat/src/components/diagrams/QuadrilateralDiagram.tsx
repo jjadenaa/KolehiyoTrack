@@ -27,23 +27,35 @@ export function SquareDiagram({
 }
 
 export function RectangleDiagram({
-  width, height, vertexLabels = ["A", "B", "C", "D"], sideLabels, angleLabels
-}: { width: number; height: number } & LabelProps) {
+  width, height, vertexLabels = ["A", "B", "C", "D"], sideLabels, angleLabels, diagonalLabel
+}: { width: number; height: number; diagonalLabel?: string } & LabelProps) {
   const w = 120, h = 80, x = 50, y = 70;
   const [A, B, C, D] = vertexLabels;
-  const wL = sideLabels?.width ?? width;
-  const hL = sideLabels?.height ?? height;
+
+  const hasSideLabels = Boolean(sideLabels && Object.keys(sideLabels).length > 0);
+  const wVal = sideLabels?.width ?? sideLabels?.w ?? sideLabels?.AB ?? sideLabels?.top;
+  const hVal = sideLabels?.height ?? sideLabels?.h ?? sideLabels?.BC ?? sideLabels?.right;
+
+  const wL = wVal !== undefined ? (String(wVal).toLowerCase().includes("w") || String(wVal).includes("=") ? String(wVal) : `w = ${wVal}`) : (hasSideLabels ? undefined : `w = ${width}`);
+  const hL = hVal !== undefined ? (String(hVal).toLowerCase().includes("h") || String(hVal).includes("=") ? String(hVal) : `h = ${hVal}`) : (hasSideLabels ? undefined : `h = ${height}`);
+
   return (
     <svg viewBox="0 0 220 220" className="w-full max-w-[280px] h-auto mx-auto">
       <rect x={x} y={y} width={w} height={h} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500" />
+      {diagonalLabel && (
+        <>
+          <line x1={x} y1={y + h} x2={x + w} y2={y} stroke="currentColor" strokeWidth="1.5" strokeDasharray="4,4" className="text-purple-500" />
+          <text x={x + w / 2 - 10} y={y + h / 2 - 6} textAnchor="end" fill="currentColor" fontSize="11" fontWeight="600" className="text-purple-500">{diagonalLabel}</text>
+        </>
+      )}
       {/* Vertex labels */}
       <text x={x - 6} y={y - 6} textAnchor="end" fill="currentColor" fontSize="13" fontWeight="700" className="text-blue-500">{A}</text>
       <text x={x + w + 6} y={y - 6} textAnchor="start" fill="currentColor" fontSize="13" fontWeight="700" className="text-blue-500">{B}</text>
       <text x={x + w + 6} y={y + h + 16} textAnchor="start" fill="currentColor" fontSize="13" fontWeight="700" className="text-blue-500">{C}</text>
       <text x={x - 6} y={y + h + 16} textAnchor="end" fill="currentColor" fontSize="13" fontWeight="700" className="text-blue-500">{D}</text>
       {/* Side labels */}
-      <text x={x + w / 2} y={y - 10} textAnchor="middle" fill="currentColor" fontSize="11" fontWeight="600" className="text-green-500">w = {wL}</text>
-      <text x={x + w + 10} y={y + h / 2 + 4} textAnchor="start" fill="currentColor" fontSize="11" fontWeight="600" className="text-red-500">h = {hL}</text>
+      {wL && <text x={x + w / 2} y={y - 10} textAnchor="middle" fill="currentColor" fontSize="11" fontWeight="600" className="text-green-500">{wL}</text>}
+      {hL && <text x={x + w + 10} y={y + h / 2 + 4} textAnchor="start" fill="currentColor" fontSize="11" fontWeight="600" className="text-red-500">{hL}</text>}
       {angleLabels?.[A] && <text x={x + 8} y={y + 12} textAnchor="start" fill="currentColor" fontSize="10" fontWeight="700" className="text-purple-500">∠{A} = {angleLabels[A]}°</text>}
     </svg>
   );
@@ -73,18 +85,39 @@ export function ParallelogramDiagram({
 }
 
 export function TrapezoidDiagram({
-  top, bottom, height, vertexLabels = ["A", "B", "C", "D"], sideLabels, angleLabels
-}: { top: number; bottom: number; height: number } & LabelProps) {
+  top, bottom, height, vertexLabels = ["A", "B", "C", "D"], sideLabels, angleLabels, showMedian = false, showDiagonals = false, medianLabel
+}: { top: number; bottom: number; height: number; showMedian?: boolean; showDiagonals?: boolean; medianLabel?: string } & LabelProps) {
   const b = 120, t = 60, h = 70, x = 50, y = 80;
   const offset = (b - t) / 2;
   const [A, B, C, D] = vertexLabels;
   const topL = sideLabels?.top ?? top;
   const botL = sideLabels?.bottom ?? bottom;
   const hL = sideLabels?.height ?? height;
+
+  const mLeftX = x + offset / 2;
+  const mLeftY = y - h / 2;
+  const mRightX = x + offset + t + (b - (offset + t)) / 2;
+  const mRightY = y - h / 2;
+
   return (
     <svg viewBox="0 0 220 220" className="w-full max-w-[280px] h-auto mx-auto">
       <polygon points={`${x + offset},${y - h} ${x + offset + t},${y - h} ${x + b},${y} ${x},${y}`} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500" />
       <line x1={x + offset + t / 2} y1={y - h} x2={x + offset + t / 2} y2={y} stroke="currentColor" strokeWidth="1.5" strokeDasharray="4,4" className="text-gray-400" />
+      
+      {showDiagonals && (
+        <>
+          <line x1={x + offset} y1={y - h} x2={x + b} y2={y} stroke="currentColor" strokeWidth="1.5" strokeDasharray="3,3" className="text-purple-400" />
+          <line x1={x + offset + t} y1={y - h} x2={x} y2={y} stroke="currentColor" strokeWidth="1.5" strokeDasharray="3,3" className="text-purple-400" />
+        </>
+      )}
+
+      {showMedian && (
+        <>
+          <line x1={mLeftX} y1={mLeftY} x2={mRightX} y2={mRightY} stroke="currentColor" strokeWidth="2" strokeDasharray="4,2" className="text-amber-500" />
+          <text x={(mLeftX + mRightX) / 2} y={mLeftY - 4} textAnchor="middle" fill="currentColor" fontSize="11" fontWeight="700" className="text-amber-500">{medianLabel ? `median = ${medianLabel}` : "median"}</text>
+        </>
+      )}
+
       {/* Vertex labels */}
       <text x={x + offset - 6} y={y - h - 6} textAnchor="end" fill="currentColor" fontSize="13" fontWeight="700" className="text-blue-500">{A}</text>
       <text x={x + offset + t + 6} y={y - h - 6} textAnchor="start" fill="currentColor" fontSize="13" fontWeight="700" className="text-blue-500">{B}</text>

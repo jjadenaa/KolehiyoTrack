@@ -16,6 +16,7 @@ export function RightTriangleDiagram({
   const sideC = sideLabels?.c; // only render if explicitly given in text
   const angleA = angleLabels?.[A];
   const angleB = angleLabels?.[B];
+  const angleC = angleLabels?.[C];
   return (
     <svg viewBox={`0 0 ${w + pad * 2 + 50} ${h + pad * 2 + 30}`} className="w-full max-w-[280px] h-auto mx-auto">
       <polygon points={`${x},${y} ${x + w},${y} ${x},${y - h}`} fill="none" stroke="currentColor" strokeWidth="2.5" className="text-blue-500" />
@@ -29,8 +30,21 @@ export function RightTriangleDiagram({
       <text x={x + w / 2} y={y + 14} textAnchor="middle" fill="currentColor" fontSize="11" fontWeight="600" className="text-green-500">{sideB}</text>
       {sideC && <text x={x + w / 2 + 6} y={y - h / 2 - 6} textAnchor="start" fill="currentColor" fontSize="11" fontWeight="600" className="text-red-500">{sideC}</text>}
       {/* Angle labels if given */}
-      {angleA && <text x={x + 18} y={y - h + 14} textAnchor="start" fill="currentColor" fontSize="11" fontWeight="700" className="text-purple-500">∠{A} = {angleA}°</text>}
-      {angleB && <text x={x + 4} y={y - 16} textAnchor="start" fill="currentColor" fontSize="11" fontWeight="700" className="text-purple-500">∠{B} = {angleB}°</text>}
+      {angleA && (
+        <text x={x + 18} y={y - h + 14} textAnchor="start" fill="currentColor" fontSize="11" fontWeight="700" className="text-purple-500">
+          {String(angleA).includes("°") || String(angleA).includes("θ") ? `∠${A} = ${angleA}` : `∠${A} = ${angleA}°`}
+        </text>
+      )}
+      {angleB && (
+        <text x={x + 4} y={y - 16} textAnchor="start" fill="currentColor" fontSize="11" fontWeight="700" className="text-purple-500">
+          {String(angleB).includes("°") || String(angleB).includes("θ") ? `∠${B} = ${angleB}` : `∠${B} = ${angleB}°`}
+        </text>
+      )}
+      {angleC && (
+        <text x={x + w - 20} y={y - 8} textAnchor="end" fill="currentColor" fontSize="11" fontWeight="700" className="text-purple-500">
+          {String(angleC).includes("°") || String(angleC).includes("θ") ? `∠${C} = ${angleC}` : `∠${C} = ${angleC}°`}
+        </text>
+      )}
     </svg>
   );
 }

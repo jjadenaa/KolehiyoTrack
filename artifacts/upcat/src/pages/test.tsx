@@ -289,7 +289,7 @@ export default function TestPage() {
             Question {page.globalIndex + 1}
           </div>
           <SmartText text={parsePassage(q.text).question} className="text-base" />
-          <DiagramRenderer diagram={q.diagram} />
+          <DiagramRenderer diagram={q.diagram} questionText={q.text} />
           <div className="grid gap-2">
             {q.choices.map((choice: any, i: number) => (
               <Button
