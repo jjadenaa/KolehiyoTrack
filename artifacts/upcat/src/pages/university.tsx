@@ -594,7 +594,7 @@ function PromptGeneratorPanel({
     parts.push(" Do not rush in generating question always triple check to fit the requirements of the callibrations. Remake questions that has error or does not meet the qualifications in these calibrations stated.")
     parts.push("- Do not reuse or rephrase your questions — generate entirely new questions each time do not just translate english quizzes to filipino and vice versa..");
     parts.push("- Exactly ONE choice is correct no other possible answers in the choices must be generated.");
-    parts.push("- Include a clear, educational explanation for the correct answer (2-4 sentences).");
+    parts.push("- Include a clear, educational explanation for the correct answer (2-4 sentences). For math formulas, equations, or step-by-step calculations, format them using KaTeX LaTeX notation (e.g., $12 \\times 5 = 60$, $$\\text{height}^2 + 12^2 = 13^2$$, \\frac{a}{b}, \\sqrt{x}).");
     parts.push("- Add instructions before each question where appropriate.");
     parts.push("- For Reading Comprehension (reading_english, reading_filipino): return plain text in the format specified in that section's OUTPUT FORMAT.");
     parts.push("- For ALL OTHER subjects (math, science, language_english, language_filipino): return a valid JSON array — no markdown, no code fences, no extra text.");
@@ -1003,7 +1003,17 @@ function PromptGeneratorPanel({
       }
 
       // 2. Try simple text format (ID:, SUBJECT:, PASSAGE:, QUESTION:, A), B), C), D), CORRECT:, EXPLANATION:)
-      const blocks = text.split(/\n\s*-{3,}\s*\n|\n\n(?=UNIVERSITY:\s|ID:\s|PASSAGE:\s|SUBJECT:\s|QUESTION:\s)/i).filter((b) => b.trim().length > 0);
+      let preprocessedText = text
+        .replace(/\r\n/g, "\n")
+        .replace(/(^|\n|\s+)(UNIVERSITY:|ID:|SUBJECT:|TOPIC:|PASSAGE:|QUESTION:|CORRECT:|EXPLANATION:|DIAGRAM:)\s*/gi, (_match, _prefix, tag) => {
+          return `\n${tag.toUpperCase()} `;
+        })
+        .replace(/\s+([A-D][\).])\s+/g, "\n$1 ");
+
+      const blocks = preprocessedText
+        .split(/\n\s*-{3,}\s*\n|\n+(?=(?:UNIVERSITY:|ID:)\s+)/i)
+        .filter((b) => b.trim().length > 0);
+
       const valid: BankQuestion[] = [];
       let currentPassageId = 0;
       let lastPassageText = "";
@@ -1030,10 +1040,12 @@ function PromptGeneratorPanel({
 
         let i = 0;
         while (i < lines.length) {
-          const line = lines[i];
+          const line = lines[i].trim();
           const upper = line.toUpperCase();
 
-          if (upper.startsWith("ID:")) {
+          if (upper.startsWith("UNIVERSITY:")) {
+            i++;
+          } else if (upper.startsWith("ID:")) {
             id = line.slice(3).trim();
             i++;
           } else if (upper.startsWith("SUBJECT:")) {
@@ -1045,11 +1057,11 @@ function PromptGeneratorPanel({
           } else if (upper.startsWith("PASSAGE:")) {
             hasExplicitPassage = true;
             // Collect multi-line passage until QUESTION: or choice or end of block
-            const start = line.startsWith("PASSAGE:") ? line.slice(8).trim() : "";
+            const start = line.slice(8).trim();
             const passageLines: string[] = start ? [start] : [];
             i++;
             while (i < lines.length) {
-              const next = lines[i];
+              const next = lines[i].trim();
               const nextUpper = next.toUpperCase();
               if (
                 nextUpper.startsWith("QUESTION:") ||
@@ -1072,7 +1084,7 @@ function PromptGeneratorPanel({
             const qLines: string[] = start ? [start] : [];
             i++;
             while (i < lines.length) {
-              const next = lines[i];
+              const next = lines[i].trim();
               const nextUpper = next.toUpperCase();
               if (
                 /^[A-D][).]\s*/.test(next) ||
@@ -1105,9 +1117,9 @@ function PromptGeneratorPanel({
             const expLines: string[] = start ? [start] : [];
             i++;
             while (i < lines.length) {
-              const next = lines[i];
+              const next = lines[i].trim();
               const nextUpper = next.toUpperCase();
-              if (nextUpper.startsWith("ID:") || nextUpper.startsWith("---") || nextUpper.startsWith("DIAGRAM:")) {
+              if (nextUpper.startsWith("ID:") || nextUpper.startsWith("---") || nextUpper.startsWith("DIAGRAM:") || nextUpper.startsWith("UNIVERSITY:")) {
                 break;
               }
               expLines.push(next);
@@ -1119,9 +1131,9 @@ function PromptGeneratorPanel({
             const diagramLines: string[] = start ? [start] : [];
             i++;
             while (i < lines.length) {
-              const next = lines[i];
+              const next = lines[i].trim();
               const nextUpper = next.toUpperCase();
-              if (nextUpper.startsWith("ID:") || nextUpper.startsWith("---")) {
+              if (nextUpper.startsWith("ID:") || nextUpper.startsWith("---") || nextUpper.startsWith("UNIVERSITY:")) {
                 break;
               }
               diagramLines.push(next);

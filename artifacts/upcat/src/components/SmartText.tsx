@@ -167,14 +167,23 @@ function parseContentBlocks(text: string): ContentBlock[] {
  * Helper to determine if a string looks like a valid inline math formula,
  * as opposed to regular text containing currency or punctuation.
  */
+function isLatexString(str: string): boolean {
+  return /\\[a-zA-Z]+|\^|_|√|÷|×|°/.test(str);
+}
+
+/**
+ * Helper to determine if a string inside $...$ looks like a valid inline math formula,
+ * as opposed to regular text containing currency or punctuation.
+ */
 function isValidMath(math: string): boolean {
   if (math.includes('\n')) return false;
+  if (isLatexString(math)) return true;
 
   const words = math.toLowerCase().split(/\s+/);
   const commonWords = [
     'the', 'and', 'with', 'to', 'buy', 'for', 'was', 'she', 'had', 'been', 
     'you', 'your', 'this', 'that', 'of', 'is', 'in', 'it', 'on', 'he', 
-    'his', 'her', 'they', 'at', 'be', 'or', 'an', 'but', 'my', 'she', 'him',
+    'his', 'her', 'they', 'at', 'be', 'or', 'an', 'but', 'my', 'him',
     'only', 'from', 'about', 'would', 'should', 'could', 'which', 'who', 'whom',
     'tomorrow', 'present', 'cents', 'dollars', 'money', 'price', 'cost'
   ];
@@ -183,9 +192,12 @@ function isValidMath(math: string): boolean {
 
 /**
  * Renders text with **bold** markers as <strong> elements, and math inside $...$ or $$...$$ using KaTeX.
+ * Also automatically handles unenclosed LaTeX math constructs like \frac{}, \sqrt{}, \Rightarrow, \times, etc.
  */
 function RichText({ text }: { text: string }) {
+  // 1. Split by display math $$...$$ and inline math $...$
   const parts = text.split(/(\$\$[\s\S]*?\$\$|\$[^\s$](?:[^\$\n]*?[^\s$])?\$)/g);
+
   return (
     <>
       {parts.map((part, i) => {
@@ -198,19 +210,33 @@ function RichText({ text }: { text: string }) {
           if (isValidMath(math)) {
             return <MathElement key={i} math={math} displayMode={false} />;
           }
-          // If isValidMath fails, render the inner string without surrounding $
-          return <span key={i}>{math}</span>;
+          // If not valid math (e.g., $50), preserve original string with $
+          return <span key={i}>{part}</span>;
         }
-        
-        const boldParts = part.split(/(\*\*[\s\S]*?\*\*)/g);
+
+        // If part contains bare LaTeX commands (e.g. \frac{a}{b}, \sqrt{x}, \Rightarrow, \times, \text{...})
+        // split by LaTeX math expressions or bold tags
+        const latexSegments = part.split(/(\\[a-zA-Z]+(?:\{[^{}]*\}|\s*[\d\w_^+=-]*)*)/g);
+
         return (
           <span key={i}>
-            {boldParts.map((bPart, j) => {
-              if (bPart.startsWith("**") && bPart.endsWith("**")) {
-                const inner = bPart.slice(2, -2);
-                return <strong key={j} className="font-semibold">{inner}</strong>;
+            {latexSegments.map((seg, k) => {
+              if (seg.startsWith('\\') && isLatexString(seg)) {
+                return <MathElement key={k} math={seg} displayMode={false} />;
               }
-              return <span key={j}>{bPart}</span>;
+
+              const boldParts = seg.split(/(\*\*[\s\S]*?\*\*)/g);
+              return (
+                <span key={k}>
+                  {boldParts.map((bPart, j) => {
+                    if (bPart.startsWith("**") && bPart.endsWith("**")) {
+                      const inner = bPart.slice(2, -2);
+                      return <strong key={j} className="font-semibold">{inner}</strong>;
+                    }
+                    return <span key={j}>{bPart}</span>;
+                  })}
+                </span>
+              );
             })}
           </span>
         );

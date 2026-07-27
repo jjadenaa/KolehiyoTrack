@@ -200,7 +200,7 @@ export default function ReviewPage() {
                         <Lightbulb className="h-4 w-4" />
                         Explanation
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{answer.explanation}</p>
+                      <SmartText text={answer.explanation} className="text-sm text-muted-foreground leading-relaxed" />
                     </div>
                   )}
                 </CardContent>
