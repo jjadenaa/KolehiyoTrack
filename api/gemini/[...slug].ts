@@ -4,7 +4,7 @@ import {
   handleExtractQuestionsFromPdfOrText,
   handleGenerateSubjectQuestions,
   handleExplainQuestionError,
-} from "../artifacts/upcat/src/server/geminiHandler";
+} from "../../artifacts/upcat/src/server/geminiHandler";
 
 async function parseBody(req: any) {
   if (req.body && typeof req.body === "object") {
