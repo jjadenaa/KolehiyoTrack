@@ -1,6 +1,6 @@
 {
   "name": "KolehiyoTrack",
-  "description": "An interactive UPCAT language proficiency and practice exam platform designed to calibrate and track student performance with comprehensive review options.",
+  "description": "An interactive CET practice exam platform with AI Error Log & Mistake Diary, personalized flashcard decks, and targeted AI follow-up quizzes to master weak concepts.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

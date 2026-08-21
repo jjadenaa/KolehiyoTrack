@@ -2,9 +2,9 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
+import { geminiApiPlugin } from "./src/server/geminiPlugin";
 
-const rawPort = process.env.PORT;
-const port = rawPort ? Number(rawPort) : 3000;
+const port = 3000;
 
 const basePath = process.env.BASE_PATH ?? "/";
 
@@ -31,7 +31,7 @@ export default defineConfig(async () => {
 
   return {
     base: basePath,
-    plugins: [react(), tailwindcss(), ...replitPlugins],
+    plugins: [react(), tailwindcss(), geminiApiPlugin(), ...replitPlugins],
     resolve: {
       alias: {
         "@": path.resolve(import.meta.dirname, "src"),

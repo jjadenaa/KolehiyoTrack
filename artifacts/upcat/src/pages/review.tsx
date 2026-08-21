@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { SUBJECT_LABELS, formatTime } from "@/lib/format";
-import { Loader2, ArrowLeft, Lightbulb, CheckCircle2, XCircle, MinusCircle, Clock, TrendingUp } from "lucide-react";
+import { Loader2, ArrowLeft, Lightbulb, CheckCircle2, XCircle, MinusCircle, Clock, TrendingUp, BrainCircuit } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SmartText } from "@/components/SmartText";
 import { DiagramRenderer } from "@/components/DiagramRenderer";
+import { AskAIQuestionTutor } from "@/components/AskAIQuestionTutor";
 
 export default function ReviewPage() {
   const [, params] = useRoute("/review/:sessionId");
@@ -71,16 +72,25 @@ export default function ReviewPage() {
     <Layout>
       <div className="max-w-4xl mx-auto w-full space-y-6 pb-12">
         {/* Header */}
-        <div className="flex items-center gap-4 border-b pb-6">
-          <Button variant="ghost" size="icon" asChild className="rounded-full shrink-0">
-            <Link href={`/university/${universityId || "upcat"}`}><ArrowLeft className="h-5 w-5" /></Link>
-          </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-bold">Review Answers</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">
-              {new Date(session.createdAt).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-            </p>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b pb-6">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" asChild className="rounded-full shrink-0">
+              <Link href={`/university/${universityId || "upcat"}`}><ArrowLeft className="h-5 w-5" /></Link>
+            </Button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-2xl font-bold">Review Answers</h1>
+              <p className="text-muted-foreground text-sm mt-0.5">
+                {new Date(session.createdAt).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
           </div>
+
+          <Button asChild variant="outline" size="sm" className="gap-2 font-semibold">
+            <Link href="/mistakes">
+              <BrainCircuit className="h-4 w-4 text-amber-500" />
+              Practice in Mistake Diary
+            </Link>
+          </Button>
         </div>
 
         {/* Summary stats */}
@@ -203,6 +213,9 @@ export default function ReviewPage() {
                       <SmartText text={answer.explanation} className="text-sm text-muted-foreground leading-relaxed" />
                     </div>
                   )}
+
+                  {/* Ask AI: Diagnostic, Error Root-Cause & 30s Fast Solution */}
+                  <AskAIQuestionTutor answer={answer} questionNumber={origIndex + 1} />
                 </CardContent>
               </Card>
             );

@@ -9,12 +9,32 @@ export interface ChangelogItem {
 }
 
 // 1. Change your global version number here
-export const CURRENT_VERSION = "v0.2.1 Beta";
+export const CURRENT_VERSION = "v0.3.0 Beta";
 
 // 2. Add or update release notes here (newest first)
 export const CHANGELOG_DATA: ChangelogItem[] = [
+   {
+    version: "v0.3.1",
+    date: "August 21, 2026",
+    changes: [
+      {
+        title: "Added PDF import, added more universities, +more features and bug fixes",
+        description: "Added AI to import PDF reviewers & manual import, added DLSU & ACET, ability to set exam dates, bug fixes"
+      }
+    ]
+  },
   {
-    version: "v0.2.0",
+    version: "v0.3.0",
+    date: "July 26, 2026",
+    changes: [
+      {
+        title: "Added AI chatbox support, updated college applications, bug fixes",
+        description: "Added Gemini 3.6 support, calendar, more university application reminders, smooth UI animations, bug fixes"
+      }
+    ]
+  },
+  {
+    version: "v0.2.1",
     date: "July 26, 2026",
     changes: [
       {

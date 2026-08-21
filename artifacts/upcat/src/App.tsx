@@ -11,6 +11,7 @@ import UniversityPage from "@/pages/university";
 import TestPage from "@/pages/test";
 import ResultsPage from "@/pages/results";
 import ReviewPage from "@/pages/review";
+import MistakeDiaryPage from "@/pages/mistake-diary";
 import ImageManagerPage from "@/pages/image-manager";
 import NotFound from "@/pages/not-found";
 
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/test" component={TestPage} />
       <Route path="/results" component={ResultsPage} />
       <Route path="/review/:sessionId" component={ReviewPage} />
+      <Route path="/mistakes" component={MistakeDiaryPage} />
       <Route path="/images" component={ImageManagerPage} />
       <Route component={NotFound} />
     </Switch>

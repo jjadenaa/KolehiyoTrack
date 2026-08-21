@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { User, onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import { auth, googleProvider } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
-import { setLocalAddedUniversities } from "@/lib/userUniversities";
+import { setLocalAddedUniversities, setLocalExamDates } from "@/lib/userUniversities";
 
 interface AuthContextType {
   user: User | null;
@@ -20,10 +20,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+    let lastUid: string | null = null;
+
+    const clearUserLocalStorage = () => {
+      try {
+        const keysToClear: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (
+            key.startsWith("iskolartrack_") || 
+            key.startsWith("kolehiyotrack_")
+          )) {
+            keysToClear.push(key);
+          }
+        }
+        keysToClear.forEach((key) => localStorage.removeItem(key));
+        setLocalAddedUniversities([]);
+        setLocalExamDates({});
+      } catch (err) {
+        console.error("Failed to clear local user storage:", err);
+      }
+    };
+
     try {
       unsubscribe = onAuthStateChanged(
         auth,
         (firebaseUser) => {
+          const currentUid = firebaseUser ? firebaseUser.uid : null;
+          if (currentUid === null || (lastUid !== null && currentUid !== lastUid)) {
+            // User signed out, unauthenticated, or switched account -> wipe cached local keys
+            clearUserLocalStorage();
+          }
+          lastUid = currentUid;
           setUser(firebaseUser);
           setLoading(false);
         },
@@ -43,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (): Promise<void> => {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error: any) {
@@ -70,24 +98,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       await signOut(auth);
       
-      // Reset universities list for signed out session
-      setLocalAddedUniversities([]);
-      
-      // Clear localStorage of any uploaded question banks and used history so they don't overlap
+      // Clear localStorage of user-specific keys and reset universities to defaults
       const keysToClear: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && (
-          key.startsWith("iskolartrack_bank_") || 
-          key.startsWith("iskolartrack_used_") ||
-          key.startsWith("kolehiyotrack_bank_") ||
-          key.startsWith("kolehiyotrack_used_") ||
-          key === "kolehiyotrack_added_universities"
+          key.startsWith("iskolartrack_") || 
+          key.startsWith("kolehiyotrack_")
         )) {
           keysToClear.push(key);
         }
       }
       keysToClear.forEach((key) => localStorage.removeItem(key));
+
+      setLocalAddedUniversities([]);
+      setLocalExamDates({});
       
       // Redirect to the base URL of the app to reset state and prevent 404 errors on nested pages under static hosting
       window.location.href = import.meta.env.BASE_URL || "/";
@@ -107,6 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   );
 }
+
 
 export function useAuth() {
   const context = useContext(AuthContext);

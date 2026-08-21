@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { markQuestionsUsed, getPassageId } from "@/lib/questionBank";
+import { recordSessionMistakes } from "@/lib/mistakeDiary";
 import { ChevronLeft, ChevronRight, XCircle } from "lucide-react";
 import { SmartText } from "@/components/SmartText";
 import { DiagramRenderer } from "@/components/DiagramRenderer";
@@ -181,6 +182,13 @@ export default function TestPage() {
       totalQuestions: questions.length,
       timeTakenSeconds: initialTime - timeRemaining,
     };
+
+    // Automatically catalog mistakes into the Mistake Diary
+    try {
+      await recordSessionMistakes(sessionAnswers, universityId, user?.uid);
+    } catch (mistakeErr) {
+      console.error("Failed to catalog mistakes into diary:", mistakeErr);
+    }
 
     if (user) {
       try {

@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useLocation, Link } from "wouter";
 import { useTest } from "@/context/TestContext";
 import { Layout } from "@/components/layout";
@@ -7,9 +7,25 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { SUBJECT_LABELS, formatTime } from "@/lib/format";
-import { CheckCircle2, XCircle, MinusCircle, Clock, RotateCcw, ArrowRight, TrendingUp, AlertTriangle, Trophy, BookOpen } from "lucide-react";
+import {
+  CheckCircle2,
+  XCircle,
+  MinusCircle,
+  Clock,
+  RotateCcw,
+  ArrowRight,
+  TrendingUp,
+  AlertTriangle,
+  Trophy,
+  BookOpen,
+  BrainCircuit,
+  Sparkles,
+  Layers,
+  PartyPopper,
+} from "lucide-react";
 import { SessionAnswer } from "@/types/session";
 import { cn } from "@/lib/utils";
+import { triggerCompletionConfetti, triggerHighScoreConfetti } from "@/lib/confetti";
 
 function getStatus(pct: number) {
   if (pct >= 85) return { label: "Excellent", color: "text-emerald-600", bg: "bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800", icon: Trophy, message: "Outstanding performance! You are very well prepared for UPCAT. Keep reviewing to maintain this level." };
@@ -22,10 +38,8 @@ function getStatus(pct: number) {
 export default function ResultsPage() {
   const [, setLocation] = useLocation();
   const { lastSession, universityId, resetTest } = useTest();
-
-  useEffect(() => {
-    if (!lastSession) setLocation(`/university/${universityId || 'upcat'}`);
-  }, [lastSession, setLocation, universityId]);
+  const [isHighScore, setIsHighScore] = useState(false);
+  const confettiTriggered = useRef(false);
 
   if (!lastSession) return null;
 
@@ -45,6 +59,32 @@ export default function ResultsPage() {
   const status = getStatus(accuracyPct);
   const StatusIcon = status.icon;
 
+  useEffect(() => {
+    if (!lastSession) {
+      setLocation(`/university/${universityId || "upcat"}`);
+      return;
+    }
+
+    if (confettiTriggered.current) return;
+    confettiTriggered.current = true;
+
+    // Check & Record High Score
+    const storageKey = `kolehiyotrack_highscore_${universityId || "upcat"}`;
+    const prevHigh = parseFloat(localStorage.getItem(storageKey) || "0");
+    const currentNumScore = Math.max(0, score);
+
+    const isNewRecord = currentNumScore > prevHigh && currentNumScore > 0;
+    if (isNewRecord) {
+      localStorage.setItem(storageKey, currentNumScore.toString());
+      setIsHighScore(true);
+      triggerHighScoreConfetti(universityId || "upcat");
+    } else if (accuracyPct >= 75) {
+      triggerHighScoreConfetti(universityId || "upcat");
+    } else {
+      triggerCompletionConfetti(universityId || "upcat");
+    }
+  }, [lastSession, setLocation, universityId, score, accuracyPct]);
+
   const subjectBreakdown = (answers as SessionAnswer[]).reduce((acc, ans) => {
     if (!acc[ans.subject]) acc[ans.subject] = { correct: 0, wrong: 0, blank: 0, total: 0 };
     acc[ans.subject].total++;
@@ -62,9 +102,60 @@ export default function ResultsPage() {
 
         {/* Header */}
         <div className="text-center space-y-2 pt-6">
-          <h1 className="text-4xl font-extrabold tracking-tight">Test Results</h1>
-          <p className="text-muted-foreground">Your comprehensive UPCAT mock performance report</p>
+          <div className="flex items-center justify-center gap-2">
+            <h1 className="text-4xl font-extrabold tracking-tight">Test Results</h1>
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Replay Celebration Confetti"
+              onClick={() => {
+                if (isHighScore || accuracyPct >= 75) {
+                  triggerHighScoreConfetti(universityId || "upcat");
+                } else {
+                  triggerCompletionConfetti(universityId || "upcat");
+                }
+              }}
+              className="h-9 w-9 rounded-full text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+            >
+              <PartyPopper className="h-5 w-5 text-amber-500" />
+            </Button>
+          </div>
+          <p className="text-muted-foreground">Your comprehensive performance report & concept breakdown</p>
         </div>
+
+        {/* High Score Celebration Banner */}
+        {isHighScore && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/20 via-yellow-500/15 to-primary/15 border-2 border-amber-500/40 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-md animate-in zoom-in-95 duration-500">
+            <div className="flex items-center gap-3.5 text-center sm:text-left">
+              <div className="h-12 w-12 rounded-2xl bg-amber-500/25 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0 ring-4 ring-amber-500/15">
+                <Trophy className="h-6 w-6" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 justify-center sm:justify-start flex-wrap">
+                  <h3 className="font-extrabold text-base sm:text-lg text-foreground">
+                    🎉 New Personal High Score!
+                  </h3>
+                  <Badge className="bg-amber-500 text-white font-bold text-[10px] tracking-wide">
+                    NEW RECORD
+                  </Badge>
+                </div>
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  Outstanding achievement! You scored <strong className="text-foreground">{displayScore}</strong>, setting your new personal best benchmark for {(universityId || "upcat").toUpperCase()}.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => triggerHighScoreConfetti(universityId || "upcat")}
+              className="gap-1.5 h-9 font-semibold rounded-xl border-amber-500/40 hover:bg-amber-500/10 shrink-0"
+            >
+              <Sparkles className="h-4 w-4 text-amber-500" />
+              Celebrate Again
+            </Button>
+          </div>
+        )}
 
         {/* Score cards row */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -95,6 +186,49 @@ export default function ResultsPage() {
             <div className="text-xs text-muted-foreground">MM:SS</div>
           </Card>
         </div>
+
+        {/* AI Error Log & Mistake Diary Alert Banner */}
+        {wrongCount > 0 && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-primary/10 to-amber-500/5 border-2 border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-start gap-3.5">
+              <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                <BrainCircuit className="h-5 w-5" />
+              </div>
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <h4 className="font-bold text-base text-foreground">
+                    {wrongCount} Missed Question{wrongCount > 1 ? "s" : ""} Added to Mistake Diary
+                  </h4>
+                  <Badge className="bg-amber-500 text-white text-[10px] font-bold">Auto-Logged</Badge>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Turn your mistakes into strengths! Review with interactive flashcards or take an AI-generated targeted follow-up quiz.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => setLocation("/mistakes")}
+                className="gap-1.5 h-9 font-semibold rounded-lg bg-primary hover:bg-primary/90 flex-1 sm:flex-none"
+              >
+                <Layers className="h-4 w-4" />
+                Study Flashcards
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setLocation("/mistakes")}
+                className="gap-1.5 h-9 font-semibold rounded-lg flex-1 sm:flex-none"
+              >
+                <Sparkles className="h-4 w-4 text-amber-500" />
+                Targeted Quiz
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Main score + status */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

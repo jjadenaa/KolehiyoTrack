@@ -23,13 +23,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { LogIn, LogOut, Sun, Moon, Menu, Plus, Home, Book, X, History, MessageSquare } from "lucide-react";
+import { LogIn, LogOut, Sun, Moon, Menu, Plus, Home, Book, X, History, MessageSquare, BrainCircuit, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CURRENT_VERSION, CHANGELOG_DATA } from "../config/changelog";
+import { getLocalMistakes } from "@/lib/mistakeDiary";
+import { AICreditsBadge } from "@/components/AICreditsBadge";
+import { UniversityLogo } from "@/components/UniversityLogo";
 
 const UNIVERSITIES = [
-  { id: 'upcat', name: 'University of the Philippines - (UPCAT 2027)' },
-  { id: 'bu', name: 'Bicol University - (BUCET 2027)' }
+  { id: 'upcat', name: 'University of the Philippines - (UPCAT 2028)', shortName: 'UPCAT', date: 'TBA' },
+  { id: 'ateneo', name: 'Ateneo de Manila University - (ACET 2028)', shortName: 'ACET', date: 'TBA' },
+  { id: 'dlsu', name: 'De La Salle University - (DCAT 2028)', shortName: 'DCAT', date: 'TBA' },
+  { id: 'bu', name: 'Bicol University - (BUCET 2027)', shortName: 'BUCET', date: 'November 19, 2026' }
 ];
 
 export function Layout({ children, hideSidebar = false }: { children: React.ReactNode; hideSidebar?: boolean }) {
@@ -86,6 +91,18 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                     Home
                   </span>
                 </Link>
+
+                <Link href="/mistakes">
+                  <span className={cn("flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer", location === '/mistakes' ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+                    <div className="flex items-center gap-3">
+                      <BrainCircuit className="h-4 w-4 text-amber-500" />
+                      <span>Mistake Diary</span>
+                    </div>
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                      AI Log
+                    </span>
+                  </span>
+                </Link>
               </nav>
               
               <div className="mt-8 px-4 text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 flex items-center justify-between">
@@ -113,14 +130,14 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                         return (
                           <div key={uni.id} className="flex items-center justify-between p-3 rounded-lg border bg-muted/20">
                             <div className="flex items-center gap-3">
-                              <img 
-                                src={uni.id === 'upcat' ? `${import.meta.env.BASE_URL}up-logo.png` : `${import.meta.env.BASE_URL}bu-logo.png`} 
-                                alt={`${uni.id.toUpperCase()} logo`} 
-                                className="h-10 w-10 object-contain" 
+                              <UniversityLogo
+                                universityId={uni.id}
+                                alt={`${uni.shortName} logo`}
+                                className="h-10 w-10 shrink-0 object-contain"
                               />
                               <div>
-                                <h4 className="text-sm font-bold text-foreground">{uni.id === 'upcat' ? 'UPCAT' : 'BUCET'}</h4>
-                                <p className="text-xs text-muted-foreground">{uni.id === 'upcat' ? 'August 1-2, 2026' : 'TBA'}</p>
+                                <h4 className="text-sm font-bold text-foreground">{uni.shortName}</h4>
+                                <p className="text-xs text-muted-foreground">{uni.date}</p>
                               </div>
                             </div>
                             <Button 
@@ -151,23 +168,23 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                 ) : (
                   filteredUniversities.map(uni => {
                     const isUP = uni.id === 'upcat';
+                    const isAteneo = uni.id === 'ateneo';
+                    const isDLSU = uni.id === 'dlsu';
                     const isBU = uni.id === 'bu';
                     const isActive = location === `/university/${uni.id}`;
                     
                     let itemClass = "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent";
                     if (isUP) {
                       itemClass = "bg-[#7b1113] text-white border-[#921416] hover:bg-[#8c1315]";
+                    } else if (isAteneo) {
+                      itemClass = "bg-[#003366] text-white border-[#004080] hover:bg-[#00264d]";
+                    } else if (isDLSU) {
+                      itemClass = "bg-[#00703c] text-white border-[#008547] hover:bg-[#005a30]";
                     } else if (isBU) {
                       itemClass = "bg-[#009cb8] text-white border-[#00adc3] hover:bg-[#008ba5]";
                     } else if (isActive) {
                       itemClass = "bg-primary text-primary-foreground border-primary";
                     }
-
-                    const logoSrc = isUP 
-                      ? `${import.meta.env.BASE_URL}up-logo.png` 
-                      : isBU 
-                        ? `${import.meta.env.BASE_URL}bu-logo.png` 
-                        : `${import.meta.env.BASE_URL}logo.png`;
 
                     return (
                       <Link key={uni.id} href={`/university/${uni.id}`}>
@@ -175,10 +192,10 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                           "flex items-start gap-3 rounded-md px-3 py-2.5 transition-all cursor-pointer shadow-sm border",
                           itemClass
                         )}>
-                          <img 
-                            src={logoSrc} 
-                            alt={`${uni.id.toUpperCase()} logo`} 
-                            className="h-5 w-5 shrink-0 object-contain mt-0.5" 
+                          <UniversityLogo
+                            universityId={uni.id}
+                            alt={`${uni.shortName} logo`}
+                            className="h-5 w-5 shrink-0 object-contain mt-0.5"
                           />
                           <span className="text-xs font-bold leading-normal break-words">{uni.name}</span>
                         </span>
@@ -191,7 +208,8 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
 
             {/* Sidebar Footer with Changelog and Version */}
             <div className="p-4 border-t bg-card/50 flex flex-col gap-2.5 mt-auto shrink-0">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/85 px-1 block">
+              <AICreditsBadge />
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/85 px-1 block pt-1">
                 Visit our social media pages
               </span>
               <a 
@@ -288,6 +306,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
               </Button>
             )}
             <div className="ml-auto flex items-center space-x-3">
+              <AICreditsBadge compact className="hidden md:inline-flex" />
               <Button
                 variant="ghost"
                 size="icon"

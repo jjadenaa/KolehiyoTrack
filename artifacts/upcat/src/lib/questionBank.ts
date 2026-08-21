@@ -12,6 +12,85 @@ export interface BankQuestion {
   diagram?: import("@/types/diagram").DiagramSpec;
 }
 
+export const VALID_BANK_SUBJECT_IDS = [
+  "math",
+  "science",
+  "language_english",
+  "language_filipino",
+  "reading_english",
+  "reading_filipino",
+  "numerical_ability",
+  "statistics_research",
+  "logical_reasoning",
+  "abstract_reasoning",
+  "general_info",
+];
+
+export function normalizeBankSubject(subject: string, text?: string): string {
+  const s = String(subject || "").toLowerCase().trim();
+  const t = String(text || "").toLowerCase();
+
+  if (VALID_BANK_SUBJECT_IDS.includes(s)) {
+    return s;
+  }
+
+  if (s.includes("filipino") || s.includes("tagalog") || s.includes("balarila") || s.includes("panitikan")) {
+    if (s.includes("reading") || s.includes("basa") || s.includes("comprehension") || t.includes("talata") || t.includes("kwento")) {
+      return "reading_filipino";
+    }
+    return "language_filipino";
+  }
+
+  if (s.includes("reading") || s.includes("comprehension") || s.includes("passage") || t.includes("passage:") || t.includes("according to the passage")) {
+    return "reading_english";
+  }
+
+  if (s.includes("abstract") || s.includes("spatial") || s.includes("mental") || s.includes("figure") || s.includes("pattern") || s.includes("matrix")) {
+    return "abstract_reasoning";
+  }
+
+  if (s.includes("logical") || s.includes("logic") || s.includes("syllogism") || s.includes("deductive")) {
+    return "logical_reasoning";
+  }
+
+  if (s.includes("numerical") || s.includes("number series") || s.includes("quantitative")) {
+    return "numerical_ability";
+  }
+
+  if (s.includes("stat") || s.includes("research") || s.includes("business math") || s.includes("interest")) {
+    return "statistics_research";
+  }
+
+  if (s.includes("general info") || s.includes("gen info") || s.includes("analogy") || s.includes("analogies") || s.includes("civic") || s.includes("literature") || s.includes("history")) {
+    return "general_info";
+  }
+
+  if (s.includes("math") || s.includes("algebra") || s.includes("geom") || s.includes("trig") || s.includes("calc") || s.includes("arith")) {
+    return "math";
+  }
+
+  if (s.includes("sci") || s.includes("bio") || s.includes("chem") || s.includes("phys") || s.includes("earth") || s.includes("geol") || s.includes("astro") || s.includes("eco")) {
+    return "science";
+  }
+
+  if (s.includes("eng") || s.includes("lang") || s.includes("gram") || s.includes("vocab") || s.includes("profic") || s.includes("verbal") || s.includes("eapp")) {
+    return "language_english";
+  }
+
+  // Quick fallback check by question content
+  if (/\b(alin|ano|sino|saan|kailan|bakit|paano|sumusunod|piliin|salita|pangungusap|talata)\b/i.test(t)) {
+    return "language_filipino";
+  }
+  if (/(\$|\\frac|\\sqrt|\^2|f\(x\)|polynomial|triangle|slope|equation|algebra|geometry)/i.test(t)) {
+    return "math";
+  }
+  if (/(cell|mitosis|dna|velocity|gravity|atom|electron|tectonic|plate|trench|earthquake|stoichiometry|molarity|circuit)/i.test(t)) {
+    return "science";
+  }
+
+  return "science";
+}
+
 const getBankKey = (uniId: string) => `kolehiyotrack_bank_${uniId}`;
 const getUsedKey = (uniId: string) => `kolehiyotrack_used_${uniId}`;
 
@@ -19,7 +98,11 @@ export function getBankQuestions(uniId: string): BankQuestion[] {
   try {
     const raw = localStorage.getItem(getBankKey(uniId));
     if (!raw) return [];
-    return JSON.parse(raw) as BankQuestion[];
+    const questions = JSON.parse(raw) as BankQuestion[];
+    return questions.map((q) => ({
+      ...q,
+      subject: normalizeBankSubject(q.subject, q.text),
+    }));
   } catch {
     return [];
   }
@@ -29,7 +112,11 @@ export function getBankUpdatedAt(uniId: string): number { return parseInt(localS
 export function setBankUpdatedAt(uniId: string, timestamp: number): void { localStorage.setItem(`kolehiyotrack_bank_updated_${uniId}`, timestamp.toString()); }
 
 export function saveBankQuestions(questions: BankQuestion[], uniId: string, skipTimestampUpdate = false): void {
-  localStorage.setItem(getBankKey(uniId), JSON.stringify(questions));
+  const normalized = questions.map((q) => ({
+    ...q,
+    subject: normalizeBankSubject(q.subject, q.text),
+  }));
+  localStorage.setItem(getBankKey(uniId), JSON.stringify(normalized));
   if (!skipTimestampUpdate) {
     setBankUpdatedAt(uniId, Date.now());
   }
@@ -38,7 +125,11 @@ export function saveBankQuestions(questions: BankQuestion[], uniId: string, skip
 export function addBankQuestions(incoming: BankQuestion[], uniId: string): { added: number; skipped: number } {
   const existing = getBankQuestions(uniId);
   const existingIds = new Set(existing.map((q) => q.id));
-  const toAdd = incoming.filter((q) => !existingIds.has(q.id));
+  const normalizedIncoming = incoming.map((q) => ({
+    ...q,
+    subject: normalizeBankSubject(q.subject, q.text),
+  }));
+  const toAdd = normalizedIncoming.filter((q) => !existingIds.has(q.id));
   saveBankQuestions([...existing, ...toAdd], uniId);
   return { added: toAdd.length, skipped: incoming.length - toAdd.length };
 }
@@ -149,6 +240,12 @@ export function pickQuestions(
   // For other subjects, just shuffle and pick
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count);
+}
+
+export function deleteBankQuestion(id: string, uniId: string): void {
+  const all = getBankQuestions(uniId);
+  const filtered = all.filter((q) => q.id !== id);
+  saveBankQuestions(filtered, uniId);
 }
 
 export function getBankStats(uniId: string, subject?: string): { total: number; unused: number } {

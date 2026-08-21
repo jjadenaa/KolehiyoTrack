@@ -19,14 +19,25 @@ import {
   ArrowRight, History, PlayCircle, BookOpen, ChevronDown, ChevronUp,
   CheckCircle, XCircle, Clock, RotateCcw, Upload, Trash2, RefreshCw,
   AlertTriangle, Copy, FileText, Sparkles, Wand2, Calculator, Cloud, CloudOff,
-  ChevronLeft, ChevronRight, Gauge, ExternalLink
+  ChevronLeft, ChevronRight, Gauge, ExternalLink, BrainCircuit, Layers, Calendar
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   getBankStats, getBankQuestions, addBankQuestions, clearBank,
   resetUsedIds, pickQuestions, BankQuestion
 } from "@/lib/questionBank";
+import { getLocalMistakes } from "@/lib/mistakeDiary";
 import { useUpcatCountdown } from "@/hooks/useCountdown";
+import { UniversityLogo } from "@/components/UniversityLogo";
+import { AIQuestionBankStudio } from "@/components/AIQuestionBankStudio";
+import { SetExamDateDialog } from "@/components/SetExamDateDialog";
+import {
+  getLocalExamDates,
+  subscribeUserExamDates,
+  saveSingleExamDate,
+  calculateDaysRemaining,
+  formatCustomDateDisplay
+} from "@/lib/userUniversities";
 
 // ─── Editable Number Input ────────────────────────────────────────────────────
 
@@ -393,20 +404,179 @@ const TOPIC_GROUPS: Record<string, { label: string; options: { value: string; la
       ],
     },
   ],
+  numerical_ability: [
+    {
+      label: "Numerical Ability",
+      options: [
+        { value: "arithmetic_operations", label: "Arithmetic Operations & Fractions/Decimals" },
+        { value: "number_series", label: "Number Series & Numerical Sequences" },
+        { value: "quantitative_comparison", label: "Quantitative Comparison & Estimation" },
+        { value: "mental_math", label: "Mental Math & Fast Calculations" },
+      ],
+    },
+  ],
+  statistics_research: [
+    {
+      label: "Statistics & Research",
+      options: [
+        { value: "measures_central_tendency", label: "Measures of Central Tendency & Dispersion" },
+        { value: "probability_combinatorics", label: "Probability, Permutations & Combinations" },
+        { value: "normal_distribution", label: "Normal Distribution & Data Interpretation" },
+        { value: "research_methodology", label: "Research Methodology, Variables & Hypotheses" },
+        { value: "business_math", label: "Business Math (Interest, Profit/Loss, Break-even)" },
+      ],
+    },
+  ],
+  logical_reasoning: [
+    {
+      label: "Logical Reasoning",
+      options: [
+        { value: "syllogisms_deductive", label: "Syllogisms & Deductive Reasoning" },
+        { value: "analytical_puzzles", label: "Analytical Puzzles & Relational Logic" },
+        { value: "conditional_logic", label: "Conditional Statements (If-Then Logic)" },
+        { value: "venn_diagrams_sets", label: "Venn Diagrams & Set Logic" },
+      ],
+    },
+  ],
+  abstract_reasoning: [
+    {
+      label: "Abstract Reasoning",
+      options: [
+        { value: "spatial_patterns_matrices", label: "Spatial Patterns & Matrices" },
+        { value: "figure_rotations_folding", label: "Figure Rotations & Paper Folding" },
+        { value: "number_figure_series", label: "Number & Figure Series Progression" },
+        { value: "rule_identification", label: "Non-Verbal Rule Identification" },
+      ],
+    },
+  ],
+  general_info: [
+    {
+      label: "Analogies & General Info",
+      options: [
+        { value: "advanced_analogies", label: "Advanced Verbal Analogies" },
+        { value: "philippine_history_civics", label: "Philippine History, Civics & Constitution" },
+        { value: "world_history_geography", label: "World History & Geography" },
+        { value: "arts_literature_culture", label: "Arts, Literature & Filipino Culture" },
+        { value: "current_affairs", label: "Current Events & General Knowledge" },
+      ],
+    },
+  ],
   reading_english: [],
   reading_filipino: [],
 };
 
-type SubjectId = "language_english" | "language_filipino" | "math" | "science" | "reading_english" | "reading_filipino";
+export type SubjectId =
+  | "language_english"
+  | "language_filipino"
+  | "math"
+  | "science"
+  | "reading_english"
+  | "reading_filipino"
+  | "numerical_ability"
+  | "statistics_research"
+  | "logical_reasoning"
+  | "abstract_reasoning"
+  | "general_info";
 
-const AVAILABLE_SUBJECTS: { id: SubjectId; label: string }[] = [
+export const AVAILABLE_SUBJECTS: { id: SubjectId; label: string }[] = [
   { id: "language_english", label: "Language Proficiency (English)" },
   { id: "language_filipino", label: "Language Proficiency (Filipino)" },
   { id: "math", label: "Mathematics" },
+  { id: "numerical_ability", label: "Numerical Ability" },
+  { id: "statistics_research", label: "Statistics & Research" },
   { id: "science", label: "Science" },
   { id: "reading_english", label: "Reading Comprehension (English)" },
   { id: "reading_filipino", label: "Reading Comprehension (Filipino)" },
+  { id: "logical_reasoning", label: "Logical Reasoning" },
+  { id: "abstract_reasoning", label: "Abstract Reasoning / Mental Ability" },
+  { id: "general_info", label: "Analogies & General Info" },
 ];
+
+export function getAvailableSubjectsForUniversity(uniId: string): { id: SubjectId; label: string }[] {
+  const uni = (uniId || "").toLowerCase();
+  if (uni === "ateneo" || uni === "admu" || uni === "acet") {
+    return [
+      { id: "language_english", label: "Language Proficiency" },
+      { id: "reading_english", label: "Reading Comprehension" },
+      { id: "math", label: "Mathematics Proficiency" },
+      { id: "numerical_ability", label: "Numerical Ability" },
+      { id: "logical_reasoning", label: "Logical Reasoning" },
+      { id: "abstract_reasoning", label: "Abstract Reasoning" },
+      { id: "general_info", label: "Analogies & General Info" },
+    ];
+  }
+  if (uni === "dlsu" || uni === "dcat") {
+    return [
+      { id: "math", label: "Mathematics & Statistics" },
+      { id: "statistics_research", label: "Statistics & Research" },
+      { id: "science", label: "Science Subtest" },
+      { id: "language_english", label: "Language Proficiency & EAPP" },
+      { id: "reading_english", label: "Reading Comprehension" },
+      { id: "abstract_reasoning", label: "Mental Ability / Abstract Reasoning" },
+    ];
+  }
+  if (uni === "bu" || uni === "bucet") {
+    return [
+      { id: "language_english", label: "Language Proficiency (English)" },
+      { id: "language_filipino", label: "Language Proficiency (Filipino)" },
+      { id: "math", label: "Mathematics" },
+      { id: "science", label: "Science" },
+      { id: "reading_english", label: "Reading Comprehension (English)" },
+      { id: "reading_filipino", label: "Reading Comprehension (Filipino)" },
+    ];
+  }
+  return [
+    { id: "language_english", label: "Language Proficiency (English)" },
+    { id: "language_filipino", label: "Language Proficiency (Filipino)" },
+    { id: "math", label: "Mathematics" },
+    { id: "science", label: "Science" },
+    { id: "reading_english", label: "Reading Comprehension (English)" },
+    { id: "reading_filipino", label: "Reading Comprehension (Filipino)" },
+  ];
+}
+
+export function getDefaultItemCounts(uniId: string): Record<string, number> {
+  const uni = (uniId || "").toLowerCase();
+  if (uni === "ateneo" || uni === "admu" || uni === "acet") {
+    return {
+      language_english: 100,
+      reading_english: 30,
+      math: 60,
+      numerical_ability: 25,
+      logical_reasoning: 25,
+      abstract_reasoning: 30,
+      general_info: 25,
+    };
+  }
+  if (uni === "dlsu" || uni === "dcat") {
+    return {
+      math: 50,
+      statistics_research: 40,
+      science: 45,
+      language_english: 50,
+      reading_english: 30,
+      abstract_reasoning: 40,
+    };
+  }
+  if (uni === "bu" || uni === "bucet") {
+    return {
+      language_english: 30,
+      language_filipino: 30,
+      math: 50,
+      science: 60,
+      reading_english: 30,
+      reading_filipino: 30,
+    };
+  }
+  return {
+    language_english: 40,
+    language_filipino: 40,
+    math: 60,
+    science: 60,
+    reading_english: 40,
+    reading_filipino: 40,
+  };
+}
 
 // ─── Sample Gemini Prompt ─────────────────────────────────────────────────────
 
@@ -888,6 +1058,47 @@ function PromptGeneratorPanel({
         parts.push("");
       }
 
+      if (subject.id === "numerical_ability") {
+        parts.push("");
+        parts.push(`[${quizName} NUMERICAL ABILITY CALIBRATION]`);
+        parts.push("- Focus on rapid mental math, speed arithmetic, fractions/decimals/percentages, number series & sequence discovery, ratios/proportions, quantitative comparison, and real-world practical word problems.");
+        parts.push("- Calculations must be clean, elegant, and directly solvable within 30-60 seconds without long-form tedious calculations or calculator use.");
+        parts.push("- Include 4 choices (A, B, C, D) and a step-by-step solution using KaTeX LaTeX or clear inline math.");
+        parts.push("");
+      }
+
+      if (subject.id === "statistics_research") {
+        parts.push("");
+        parts.push(`[${quizName} STATISTICS & RESEARCH / BUSINESS MATH CALIBRATION]`);
+        parts.push("- Focus on: Measures of central tendency (mean, median, mode) and dispersion (range, variance, standard deviation), probability rules, permutations & combinations, normal distribution properties, data interpretation from tables/graphs, research methodology (independent/dependent variables, hypothesis testing, sampling), and business math (simple/compound interest, profit/loss, markups).");
+        parts.push("- Keep problems realistic, conceptually rigorous, and directly applicable to college entrance test standards.");
+        parts.push("");
+      }
+
+      if (subject.id === "logical_reasoning") {
+        parts.push("");
+        parts.push(`[${quizName} LOGICAL REASONING CALIBRATION]`);
+        parts.push("- Focus on formal deductive logic, syllogisms (valid vs. invalid conclusions), analytical puzzles (seating arrangements, ordering, relational logic), Venn diagrams & set logic, and conditional if-then reasoning.");
+        parts.push("- Ensure exactly ONE logically indisputable valid deduction or conclusion among the 4 choices.");
+        parts.push("");
+      }
+
+      if (subject.id === "abstract_reasoning") {
+        parts.push("");
+        parts.push(`[${quizName} ABSTRACT REASONING / MENTAL ABILITY CALIBRATION]`);
+        parts.push("- Focus on non-verbal pattern recognition, spatial orientation, figure series and matrices, rotation/reflection logic, rule identification, and figure analogies.");
+        parts.push("- For text-based descriptions of abstract reasoning figures, provide a crystal-clear, structured description of the sequence/matrix elements.");
+        parts.push("");
+      }
+
+      if (subject.id === "general_info") {
+        parts.push("");
+        parts.push(`[${quizName} ANALOGIES & GENERAL INFO CALIBRATION]`);
+        parts.push("- Focus on advanced verbal analogies, Philippine history & government/civics, world history & geography, arts & Philippine literature, and notable current affairs.");
+        parts.push("- Analogy items must have one distinct, unambiguous logical relationship with no competing distractors.");
+        parts.push("");
+      }
+
       parts.push("");
     }
 
@@ -914,7 +1125,16 @@ function PromptGeneratorPanel({
 
     // ─── University Tag Validation ───
     const targetUniCode = (universityId || "").toLowerCase();
-    const targetExamName = targetUniCode === "upcat" ? "UPCAT" : targetUniCode === "bu" ? "BUCET" : targetUniCode.toUpperCase();
+    const targetExamName =
+      targetUniCode === "upcat"
+        ? "UPCAT"
+        : targetUniCode === "bu" || targetUniCode === "bucet"
+        ? "BUCET"
+        : targetUniCode === "ateneo" || targetUniCode === "admu" || targetUniCode === "acet"
+        ? "ACET"
+        : targetUniCode === "dlsu" || targetUniCode === "dcat"
+        ? "DCAT"
+        : targetUniCode.toUpperCase();
 
     const detectedUniTags = new Set<string>();
 
@@ -956,9 +1176,24 @@ function PromptGeneratorPanel({
         } else if (tagUpper.includes("BUCET") || tagUpper === "BU" || tagUpper.includes("BICOL")) {
           detectedUniCode = "bu";
           detectedExamName = "BUCET";
+        } else if (tagUpper.includes("ACET") || tagUpper.includes("ATENEO") || tagUpper.includes("ADMU")) {
+          detectedUniCode = "ateneo";
+          detectedExamName = "ACET";
+        } else if (tagUpper.includes("DCAT") || tagUpper.includes("DLSU") || tagUpper.includes("SALLE")) {
+          detectedUniCode = "dlsu";
+          detectedExamName = "DCAT";
         }
 
-        if (detectedUniCode && detectedUniCode !== targetUniCode) {
+        const normalizedTarget =
+          targetUniCode === "admu" || targetUniCode === "acet"
+            ? "ateneo"
+            : targetUniCode === "dcat"
+            ? "dlsu"
+            : targetUniCode === "bucet"
+            ? "bu"
+            : targetUniCode;
+
+        if (detectedUniCode && detectedUniCode !== normalizedTarget) {
           setError(
             `University Mismatch Error: You are trying to upload questions tagged for "${detectedExamName}" into the ${targetExamName} page. Please change "UNIVERSITY: ${rawTag}" to "UNIVERSITY: ${targetExamName}" in your text or paste so the system knows it belongs to ${targetExamName}, or switch to the ${detectedExamName} page to upload these questions.`
           );
@@ -1194,15 +1429,40 @@ function PromptGeneratorPanel({
           "READING ENGLISH": "reading_english",
           "READING_FILIPINO": "reading_filipino",
           "READING_ENGLISH": "reading_english",
+          "READING COMPREHENSION": "reading_english",
+          "READING COMPREHENSION (ENGLISH)": "reading_english",
+          "READING COMPREHENSION (FILIPINO)": "reading_filipino",
           "LANGUAGE FILIPINO": "language_filipino",
           "LANGUAGE ENGLISH": "language_english",
           "LANGUAGE_FILIPINO": "language_filipino",
           "LANGUAGE_ENGLISH": "language_english",
           "FILIPINO LANGUAGE": "language_filipino",
           "ENGLISH LANGUAGE": "language_english",
+          "LANGUAGE PROFICIENCY": "language_english",
+          "LANGUAGE PROFICIENCY (ENGLISH)": "language_english",
+          "LANGUAGE PROFICIENCY (FILIPINO)": "language_filipino",
+          "LANGUAGE PROFICIENCY & EAPP": "language_english",
           "MATHEMATICS": "math",
           "MATH": "math",
+          "MATHEMATICS PROFICIENCY": "math",
+          "MATHEMATICS & STATISTICS": "math",
+          "NUMERICAL ABILITY": "numerical_ability",
+          "NUMERICAL_ABILITY": "numerical_ability",
+          "STATISTICS": "statistics_research",
+          "STATISTICS & RESEARCH": "statistics_research",
+          "STATISTICS_RESEARCH": "statistics_research",
+          "LOGICAL REASONING": "logical_reasoning",
+          "LOGICAL_REASONING": "logical_reasoning",
+          "ABSTRACT REASONING": "abstract_reasoning",
+          "ABSTRACT_REASONING": "abstract_reasoning",
+          "MENTAL ABILITY": "abstract_reasoning",
+          "MENTAL ABILITY / ABSTRACT REASONING": "abstract_reasoning",
+          "GENERAL INFO": "general_info",
+          "GENERAL INFORMATION": "general_info",
+          "GENERAL_INFO": "general_info",
+          "ANALOGIES & GENERAL INFO": "general_info",
           "SCIENCE": "science",
+          "SCIENCE SUBTEST": "science",
           "GENERAL": "general",
         };
         const subjectKey = subject.trim().toUpperCase();
@@ -1604,31 +1864,30 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
     setUniversityId(params.id);
   }, [params.id, setUniversityId]);
 
-  const [selectedSubjects, setSelectedSubjects] = useState<Record<string, boolean>>(
-    AVAILABLE_SUBJECTS.reduce((acc, s) => ({ ...acc, [s.id]: false }), {})
+  const universitySubjects = useMemo(() => {
+    return getAvailableSubjectsForUniversity(params.id);
+  }, [params.id]);
+
+  const defaultCounts = useMemo(() => {
+    return getDefaultItemCounts(params.id);
+  }, [params.id]);
+
+  const [selectedSubjects, setSelectedSubjects] = useState<Record<string, boolean>>(() =>
+    getAvailableSubjectsForUniversity(params.id).reduce((acc, s) => ({ ...acc, [s.id]: false }), {})
   );
-  const [itemCounts, setItemCounts] = useState<Record<string, number>>(
-    params.id === 'bu' 
-      ? {
-          language_english: 30,
-          language_filipino: 30,
-          math: 50,
-          science: 60,
-          reading_english: 30,
-          reading_filipino: 30,
-        }
-      : {
-          language_english: 40,
-          language_filipino: 40,
-          math: 60,
-          science: 60,
-          reading_english: 40,
-          reading_filipino: 40,
-        }
+  const [itemCounts, setItemCounts] = useState<Record<string, number>>(() =>
+    getDefaultItemCounts(params.id)
   );
-  const [selectedTopics, setSelectedTopics] = useState<Record<string, string[]>>(
+  const [selectedTopics, setSelectedTopics] = useState<Record<string, string[]>>(() =>
     AVAILABLE_SUBJECTS.reduce((acc, s) => ({ ...acc, [s.id]: [ALL_TOPICS_VALUE] }), {})
   );
+
+  // Update when university changes
+  useEffect(() => {
+    const subjects = getAvailableSubjectsForUniversity(params.id);
+    setSelectedSubjects(subjects.reduce((acc, s) => ({ ...acc, [s.id]: false }), {}));
+    setItemCounts(getDefaultItemCounts(params.id));
+  }, [params.id]);
 
   const [showUpload, setShowUpload] = useState(false);
   const [bankStats, setBankStats] = useState<{ total: number; unused: number }>({ total: 0, unused: 0 });
@@ -1639,6 +1898,15 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
   const [bankSyncing, setBankSyncing] = useState(false);
   const [bankSyncMsg, setBankSyncMsg] = useState("");
   const [syncFailed, setSyncFailed] = useState(false);
+
+  const [userExamDates, setUserExamDates] = useState<Record<string, string>>(() => getLocalExamDates());
+  const [showDateDialog, setShowDateDialog] = useState(false);
+
+  useEffect(() => {
+    return subscribeUserExamDates(user, (dates) => {
+      setUserExamDates(dates);
+    });
+  }, [user]);
 
   const refreshBankStats = useCallback(() => {
     setBankStats(getBankStats(params.id));
@@ -1794,11 +2062,11 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
 
   return (
     <Layout>
-      <PromptGeneratorPanel
+      <AIQuestionBankStudio
         open={showUpload}
         onClose={() => setShowUpload(false)}
         universityId={params.id}
-        onUploaded={() => {
+        onQuestionsAdded={() => {
           refreshBankStats();
           if (user) {
             handleSyncBank();
@@ -1809,35 +2077,85 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
       <div className="space-y-8">
         <div className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            {params.id === 'upcat' ? (
-              <img 
-                src={`${import.meta.env.BASE_URL}up-logo.png`} 
-                alt="UP logo" 
-                className="h-16 w-16 shrink-0 object-contain" 
-              />
-            ) : params.id === 'bu' ? (
-              <img 
-                src={`${import.meta.env.BASE_URL}bu-logo.png`} 
-                alt="BU logo" 
-                className="h-16 w-16 shrink-0 object-contain" 
-              />
-            ) : null}
-            <div className="space-y-1">
+            <UniversityLogo
+              universityId={params.id}
+              alt="University logo"
+              className="h-16 w-16 shrink-0 object-contain"
+            />
+            <div className="space-y-1.5 min-w-0 flex-1">
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-                {params.id === 'upcat' ? "University of the Philippines - (UPCAT 2027)" : params.id === 'bu' ? "Bicol University - (BUCET 2027)" : "Mock Test Configuration"}
+                {params.id === 'upcat' 
+                  ? "University of the Philippines - (UPCAT 2028)" 
+                  : params.id === 'ateneo'
+                  ? "Ateneo de Manila University - (ACET 2028)"
+                  : params.id === 'dlsu'
+                  ? "De La Salle University - (DCAT 2028)"
+                  : params.id === 'bu' 
+                  ? "Bicol University - (BUCET 2027)" 
+                  : "Mock Test Configuration"}
               </h1>
-              {params.id === 'upcat' ? (
-                <p className="text-lg font-semibold text-primary">
-                  August 1-2, 2026
-                </p>
-              ) : params.id === 'bu' ? (
-                <p className="text-lg font-semibold text-[#009cb8]">
-                  TBA
-                </p>
-              ) : null}
+              {(() => {
+                const customDate = userExamDates[params.id];
+                const displayDate = formatCustomDateDisplay(customDate, params.id);
+                const daysRemaining = calculateDaysRemaining(customDate, params.id);
+                const brandColorClass = 
+                  params.id === 'upcat' ? 'text-primary' :
+                  params.id === 'ateneo' ? 'text-[#003366]' :
+                  params.id === 'dlsu' ? 'text-[#00703c]' :
+                  params.id === 'bu' ? 'text-[#009cb8]' : 'text-primary';
+
+                return (
+                  <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                    <p className={`text-base sm:text-lg font-semibold ${brandColorClass}`}>
+                      {displayDate}
+                    </p>
+
+                    {daysRemaining !== null && daysRemaining > 0 ? (
+                      <Badge 
+                        variant="outline" 
+                        className={`gap-1.5 shadow-xs py-1 transition-all ${
+                          daysRemaining < 7 
+                            ? "animate-pulse ring-2 ring-rose-500/60 border-rose-500 bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold shadow-rose-500/20" 
+                            : "bg-background"
+                        }`}
+                      >
+                        <Clock className={`h-3 w-3 ${daysRemaining < 7 ? "text-rose-500 animate-spin [animation-duration:3s]" : "text-rose-500 animate-pulse"}`} />
+                        <span className="text-xs font-semibold">{daysRemaining} days remaining {daysRemaining < 7 && "⚠️"}</span>
+                      </Badge>
+                    ) : daysRemaining === 0 ? (
+                      <Badge variant="destructive" className="gap-1.5 shadow-xs py-1">
+                        <Clock className="h-3 w-3" />
+                        <span className="text-xs font-bold">Exam Today!</span>
+                      </Badge>
+                    ) : daysRemaining !== null && daysRemaining < 0 ? (
+                      <Badge variant="secondary" className="gap-1.5 shadow-xs py-1">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs">Exam Passed</span>
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="gap-1.5 bg-background shadow-xs py-1">
+                        <Clock className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-xs">TBA</span>
+                      </Badge>
+                    )}
+
+                    {params.id !== 'upcat' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowDateDialog(true)}
+                        className="h-7 text-xs px-2.5 font-medium gap-1.5 cursor-pointer text-muted-foreground hover:text-foreground"
+                      >
+                        <Calendar className="h-3 w-3 text-primary" />
+                        <span>{customDate ? "Change Date" : "Set Exam Date"}</span>
+                      </Button>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
-          {params.id === 'upcat' && <UpcatCountdown />}
         </div>
 
         {/* Question Bank Status */}
@@ -1959,7 +2277,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {AVAILABLE_SUBJECTS.map((subject) => {
+                {universitySubjects.map((subject) => {
                   const isSelected = selectedSubjects[subject.id];
                   const hasTopics = (TOPIC_GROUPS[subject.id] ?? []).length > 0;
                   const secsPerItem = getSecondsPerItem(subject.id, params.id);
@@ -2110,13 +2428,116 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
             </Card>
           </div>
 
-          {/* ── Sidebar (Admissions & Missions) ── */}
+          {/* ── Sidebar (Admissions & Missions & Mistake Diary) ── */}
           <div className="lg:col-span-5 space-y-6">
+            {/* AI Mistake Diary Widget Card */}
+            {(() => {
+              const diaryMistakes = getLocalMistakes(params.id);
+              const totalMistakes = diaryMistakes.length;
+              const mastered = diaryMistakes.filter((m) => m.status === "mastered").length;
+              const needsReview = diaryMistakes.filter((m) => m.status === "needs_review").length;
+              const masteryPct = totalMistakes > 0 ? Math.round((mastered / totalMistakes) * 100) : 0;
+
+              return (
+                <Card className="border-2 border-primary/20 bg-gradient-to-br from-card via-card to-amber-500/5 shadow-sm overflow-hidden">
+                  <CardHeader className="pb-3 bg-muted/20 border-b">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                          <BrainCircuit className="h-4 w-4" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-base font-bold">AI Mistake Diary</CardTitle>
+                          <CardDescription className="text-xs">
+                            Flashcards & targeted follow-up quizzes
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider bg-background">
+                        {totalMistakes} logged
+                      </Badge>
+                    </div>
+                  </CardHeader>
+
+                  <CardContent className="p-4 space-y-3">
+                    {totalMistakes > 0 ? (
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-2 text-center">
+                          <div className="p-2 rounded-lg bg-rose-500/10 border border-rose-500/20">
+                            <span className="text-xs text-muted-foreground block">Needs Review</span>
+                            <span className="text-lg font-bold text-rose-600 dark:text-rose-400">{needsReview}</span>
+                          </div>
+                          <div className="p-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                            <span className="text-xs text-muted-foreground block">Mastered</span>
+                            <span className="text-lg font-bold text-emerald-600 dark:text-emerald-400">{mastered} ({masteryPct}%)</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[11px] font-medium text-muted-foreground">
+                            <span>Mastery Progress</span>
+                            <span className="text-emerald-600 font-bold">{masteryPct}%</span>
+                          </div>
+                          <Progress value={masteryPct} className="h-1.5 rounded-full" />
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Whenever you miss questions on mock tests, they are automatically organized into personalized study flashcards with AI follow-up drills.
+                      </p>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => setLocation("/mistakes")}
+                        className="w-full text-xs font-semibold gap-1.5 h-8 bg-primary hover:bg-primary/90"
+                      >
+                        <Layers className="h-3.5 w-3.5" />
+                        Study Cards
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setLocation("/mistakes")}
+                        className="w-full text-xs font-semibold gap-1.5 h-8"
+                      >
+                        <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                        Targeted Quiz
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+
             <ExamPreparedness sessions={pastSessions} />
             <DailyMissionsTracker sessions={pastSessions} universityId={params.id} />
           </div>
         </div>
       </div>
+
+      <SetExamDateDialog
+        open={showDateDialog}
+        onOpenChange={setShowDateDialog}
+        universityId={params.id}
+        universityName={
+          params.id === 'upcat' ? "University of the Philippines - (UPCAT 2028)" :
+          params.id === 'ateneo' ? "Ateneo de Manila University - (ACET 2028)" :
+          params.id === 'dlsu' ? "De La Salle University - (DCAT 2028)" :
+          params.id === 'bu' ? "Bicol University - (BUCET 2027)" : "Entrance Exam"
+        }
+        currentDate={userExamDates[params.id] || ""}
+        defaultDate={
+          params.id === 'ateneo' ? 'Sept 19 – 27, 2026' :
+          params.id === 'dlsu' ? 'Sept 5 – Dec 6, 2026' :
+          params.id === 'bu' ? 'Aug 20 – Dec 6, 2026' : 'TBA'
+        }
+        onSaveDate={async (newDateStr) => {
+          await saveSingleExamDate(user, params.id, newDateStr);
+        }}
+      />
     </Layout>
   );
 }

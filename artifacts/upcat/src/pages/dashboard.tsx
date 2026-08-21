@@ -3,13 +3,27 @@ import { Link } from "wouter";
 import { Layout } from "@/components/layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar, Trash2, Edit3, ExternalLink } from "lucide-react";
+import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar, Trash2, Edit3, ExternalLink, BrainCircuit, Sparkles, Layers, CalendarCheck } from "lucide-react";
 import { useUpcatCountdown } from "@/hooks/useCountdown";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { getLocalAddedUniversities, subscribeUserAddedUniversities, saveUserAddedUniversities } from "@/lib/userUniversities";
+import {
+  getLocalAddedUniversities,
+  subscribeUserAddedUniversities,
+  saveUserAddedUniversities,
+  getLocalExamDates,
+  subscribeUserExamDates,
+  saveSingleExamDate,
+  calculateDaysRemaining,
+  formatCustomDateDisplay,
+} from "@/lib/userUniversities";
 import { listSessions } from "@/lib/firestoreSessions";
+import { getLocalMistakes } from "@/lib/mistakeDiary";
+import { CalendarWidget } from "@/components/CalendarWidget";
+import { AIChatbox } from "@/components/AIChatbox";
+import { UniversityLogo } from "@/components/UniversityLogo";
+import { SetExamDateDialog } from "@/components/SetExamDateDialog";
 import {
   Dialog,
   DialogContent,
@@ -18,19 +32,34 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 const UNIVERSITIES = [
   { 
     id: 'upcat', 
-    name: 'University of the Philippines - (UPCAT 2027)', 
-    date: 'August 1-2, 2026',
+    name: 'University of the Philippines - (UPCAT 2028)', 
+    date: 'TBA',
     applyUrl: 'https://upcat.up.edu.ph/',
+    description: ''
+  },
+  {
+    id: 'ateneo',
+    name: 'Ateneo de Manila University - (ACET 2028)',
+    date: 'Sept 19 – 27, 2026',
+    applyUrl: 'https://ateneo.admissions.ph/',
+    description: ''
+  },
+  {
+    id: 'dlsu',
+    name: 'De La Salle University - (DCAT 2028)',
+    date: 'Sept 5 – Dec 6, 2026',
+    applyUrl: 'https://applyarchershub.dlsu.edu.ph/ApplicationLandingPage/index/DLSU',
     description: ''
   },
   {
     id: 'bu',
     name: 'Bicol University - (BUCET 2027)',
-    date: 'TBA',
+    date: 'Aug 20 – Dec 6, 2026',
     applyUrl: 'https://ibu.bicol-u.edu.ph/sign-up?fbclid=IwY2xjawTQPAJwZG9mAWV4dG4DYWVtAjEwAGJyaWQRMUEzSHpab2JIZ3hWMUhXaWRzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeTjS04h49KzBzXXXEaiX2Da6cZA9L2zAs1TctSssit2Uj4g5iW7snT69yb04_aem_kbbDwP7cLHCmOLDVE3__dA',
     description: ''
   }
@@ -47,15 +76,6 @@ interface ApplicationTimeline {
 }
 
 const APPLICATION_TIMELINES: ApplicationTimeline[] = [
-  {
-    id: "upcat",
-    fullName: "University of the Philippines",
-    openStr: "May 2026",
-    closeStr: "May 31, 2026",
-    openDate: new Date("2026-05-01T00:00:00"),
-    closeDate: new Date("2026-05-31T23:59:59"),
-    applyUrl: "https://upcat.up.edu.ph/",
-  },
   {
     id: "admu",
     fullName: "Ateneo de Manila University",
@@ -78,9 +98,53 @@ const APPLICATION_TIMELINES: ApplicationTimeline[] = [
     id: "bu",
     fullName: "Bicol University",
     openStr: "July 23, 2026",
-    closeStr: "TBA",
+    closeStr: "October 30, 2026",
     openDate: new Date("2026-07-23T00:00:00"),
+    closeDate: new Date("2026-10-30T23:59:59"),
     applyUrl: "https://ibu.bicol-u.edu.ph/sign-up?fbclid=IwY2xjawTQPAJwZG9mAWV4dG4DYWVtAjEwAGJyaWQRMUEzSHpab2JIZ3hWMUhXaWRzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeTjS04h49KzBzXXXEaiX2Da6cZA9L2zAs1TctSssit2Uj4g5iW7snT69yb04_aem_kbbDwP7cLHCmOLDVE3__dA",
+  },
+  {
+    id: "nu",
+    fullName: "National University",
+    openStr: "August 8, 2026",
+    closeStr: "TBA",
+    openDate: new Date("2026-08-08T00:00:00"),
+    applyUrl: "https://onlineapp.national-u.edu.ph/quest/register.php?fbclid=IwY2xjawTlVvlwZG9mAWV4dG4DYWVtAjEwAGJyaWQRMWoxM0RBazZCMm8xT0JVcHdzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeFhNu_FJ9xs6Q1LrXWWkyzbilyC80NGxIL3HkcE_3vVKMn387UZJg0hUcp3Q_aem_o2XOUjub7T4nVo5RD6JESg",
+  },
+  {
+    id: "dost",
+    fullName: "DOST - SEI Scholarship",
+    openStr: "August 17, 2026",
+    closeStr: "September 17, 2026",
+    openDate: new Date("2026-08-17T00:00:00"),
+    closeDate: new Date("2026-09-17T23:59:59"),
+    applyUrl: "https://www.sei.dost.gov.ph/",
+  },
+  {
+    id: "ust",
+    fullName: "University of Santo Tomas",
+    openStr: "August 8, 2026",
+    closeStr: "January 8, 2027",
+    openDate: new Date("2026-08-08T00:00:00"),
+    closeDate: new Date("2027-01-08T23:59:59"),
+    applyUrl: "https://ustet.ust.edu.ph/home?id=blue",
+  },
+  {
+    id: "bsu",
+    fullName: "Batangas State University",
+    openStr: "August 2026",
+    closeStr: "TBA",
+    openDate: new Date("2026-08-01T00:00:00"),
+    applyUrl: "https://batstate-u.edu.ph/",
+  },
+  {
+    id: "pnu",
+    fullName: "Philippine Normal University",
+    openStr: "August 3, 2026",
+    closeStr: "October 23, 2026",
+    openDate: new Date("2026-08-03T00:00:00"),
+    closeDate: new Date("2026-10-23T23:59:59"),
+    applyUrl: "https://pwebss.pnu.edu.ph/pnu/applicants/?fbclid=IwY2xjawTlV-twZG9mAWV4dG4DYWVtAjEwAGJyaWQRMWoxM0RBazZCMm8xT0JVcHdzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEegbRVGL9Tuc7bBQDL8pLf1MNGPACDTtQzlME6Pxcu9ZPT0j0AnQfpExeF2J8_aem_kRm80K4K7C0e6bLvpMQ6ew",
   },
 ];
 
@@ -96,12 +160,24 @@ export default function Dashboard() {
   });
 
   const [addedUniIds, setAddedUniIds] = useState<string[]>(() => getLocalAddedUniversities());
+  const [userExamDates, setUserExamDates] = useState<Record<string, string>>(() => getLocalExamDates());
   const [isEditMode, setIsEditMode] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [addDialogDates, setAddDialogDates] = useState<Record<string, string>>({});
+  const [expandedAddDateUni, setExpandedAddDateUni] = useState<string | null>(null);
+  
+  // State for date editing dialog
+  const [editingDateUni, setEditingDateUni] = useState<{ id: string; name: string; defaultDate: string } | null>(null);
 
   useEffect(() => {
     return subscribeUserAddedUniversities(user, (ids) => {
       setAddedUniIds(ids);
+    });
+  }, [user]);
+
+  useEffect(() => {
+    return subscribeUserExamDates(user, (dates) => {
+      setUserExamDates(dates);
     });
   }, [user]);
 
@@ -117,6 +193,11 @@ export default function Dashboard() {
     if (!item.closeDate) return true;
     const sevenDaysAfterClose = new Date(item.closeDate.getTime() + 7 * 24 * 60 * 60 * 1000);
     return new Date() <= sevenDaysAfterClose;
+  }).sort((a, b) => {
+    if (!a.closeDate && !b.closeDate) return 0;
+    if (!a.closeDate) return 1;
+    if (!b.closeDate) return -1;
+    return a.closeDate.getTime() - b.closeDate.getTime();
   });
 
   useEffect(() => {
@@ -243,6 +324,7 @@ export default function Dashboard() {
     const newIds = addedUniIds.filter(uniId => uniId !== id);
     setAddedUniIds(newIds);
     saveUserAddedUniversities(user, newIds);
+    saveSingleExamDate(user, id, "");
     toast({
       title: "University Removed",
       description: "University has been removed from your list of active study goals.",
@@ -252,7 +334,7 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="space-y-8 max-w-5xl mx-auto w-full">
-        <div className="space-y-4 text-center py-8">
+        <div className="space-y-4 text-center py-4">
           <h1 className="text-4xl font-extrabold tracking-tight text-foreground">
             Welcome to KolehiyoTrack
           </h1>
@@ -265,6 +347,9 @@ export default function Dashboard() {
             </p>
           )}
         </div>
+
+        {/* Gemini AI Chatbox */}
+        <AIChatbox />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
           {/* Left Column: Daily Streak */}
@@ -319,213 +404,318 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            <h2 className="text-2xl font-bold tracking-tight mt-6">Application Timelines</h2>
-            <Card className="border border-border bg-card shadow-sm overflow-hidden">
-              <CardHeader className="pb-3 bg-muted/20 dark:bg-muted/10 border-b">
+            <div className="mt-6">
+              <CalendarWidget />
+            </div>
+
+            {/* AI Error Log & Mistake Diary Card */}
+            {(() => {
+              const allMistakes = getLocalMistakes("upcat");
+              const totalMistakes = allMistakes.length;
+              const needsReview = allMistakes.filter((m) => m.status === "needs_review").length;
+              const mastered = allMistakes.filter((m) => m.status === "mastered").length;
+
+              return (
+                <Card className="mt-6 border-2 border-primary/20 bg-gradient-to-br from-card to-amber-500/5 shadow-xs">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="h-7 w-7 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                          <BrainCircuit className="h-4 w-4" />
+                        </div>
+                        <CardTitle className="text-sm font-bold">Mistake Diary</CardTitle>
+                      </div>
+                      <Badge variant="outline" className="text-[10px] font-bold">
+                        {totalMistakes} logged
+                      </Badge>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 pt-1">
+                    <p className="text-xs text-muted-foreground leading-relaxed">
+                      {totalMistakes > 0
+                        ? `You have ${needsReview} question${needsReview === 1 ? "" : "s"} ready for review and ${mastered} mastered.`
+                        : "Missed mock test questions are automatically saved to your flashcard deck for smart reinforcement."}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button asChild variant="default" size="sm" className="h-8 text-xs font-semibold gap-1 bg-primary hover:bg-primary/90">
+                        <Link href="/mistakes">
+                          <Layers className="h-3.5 w-3.5" />
+                          Flashcards
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold gap-1">
+                        <Link href="/mistakes">
+                          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                          Target Quiz
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })()}
+          </div>
+
+          {/* Right Column: My Universities & Application Timelines */}
+          <div className="lg:col-span-2 space-y-8">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold tracking-tight">My Universities</h2>
                 <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-indigo-500" />
-                  <div>
-                    <CardTitle className="text-sm font-bold">Admission Calendars</CardTitle>
-                    <CardDescription className="text-xs">University application dates & deadlines</CardDescription>
-                  </div>
+                  {filteredUniversities.length > 0 && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => setIsEditMode(!isEditMode)} 
+                      className="gap-2 h-9 text-xs sm:text-sm font-semibold border-muted-foreground/20 hover:bg-muted"
+                    >
+                      <Edit3 className="h-4 w-4 text-muted-foreground" />
+                      {isEditMode ? "Done" : "Edit"}
+                    </Button>
+                  )}
+                  <Button onClick={() => setAddDialogOpen(true)} size="sm" className="gap-2 h-9 text-xs sm:text-sm font-semibold">
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
                 </div>
-              </CardHeader>
-              <CardContent className="p-4 space-y-3.5">
-                {visibleTimelines.length === 0 ? (
-                  <p className="text-xs text-muted-foreground text-center py-4">No active university application periods.</p>
+              </div>
+
+              <div className="grid gap-4">
+                {filteredUniversities.length === 0 ? (
+                  <Card className="border border-dashed p-8 text-center flex flex-col items-center justify-center space-y-4 bg-muted/5 py-12">
+                    <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+                      <GraduationCap className="h-6 w-6" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <CardTitle className="text-lg font-bold">No Universities Added</CardTitle>
+                      <CardDescription className="text-sm max-w-sm mx-auto">
+                        Select universities you want to prepare for to start studying.
+                      </CardDescription>
+                    </div>
+                    <Button onClick={() => setAddDialogOpen(true)} className="gap-2 font-semibold transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer">
+                      <Plus className="h-4 w-4" />
+                      Add a University
+                    </Button>
+                  </Card>
                 ) : (
-                  visibleTimelines.map((item) => {
-                    const today = new Date();
-                    const hasOpened = today >= item.openDate;
-                    const daysUntilClose = item.closeDate ? Math.ceil((item.closeDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
-                    const isClosingSoon = daysUntilClose !== null && daysUntilClose <= 7 && daysUntilClose >= 0;
+                  filteredUniversities.map((uni) => {
+                    const customDate = userExamDates[uni.id];
+                    const displayDate = customDate ? formatCustomDateDisplay(customDate, uni.id) : (uni.date || "TBA");
+                    const daysRemaining = calculateDaysRemaining(customDate, uni.id);
+                    const brandColorClass = 
+                      uni.id === 'upcat' ? 'text-primary' :
+                      uni.id === 'ateneo' ? 'text-[#003366]' :
+                      uni.id === 'dlsu' ? 'text-[#00703c]' :
+                      uni.id === 'bu' ? 'text-[#009cb8]' : 'text-primary';
 
                     return (
-                      <div key={item.id} className={`p-3 rounded-lg border bg-muted/10 space-y-2 transition-all ${
-                        isClosingSoon ? "border-rose-500/50 ring-1 ring-rose-500/30 bg-rose-500/5" : "border-muted-foreground/10"
-                      }`}>
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
-                            {item.id.toUpperCase()}
-                          </span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold ${
-                            isClosingSoon
-                              ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40 animate-pulse"
-                              : hasOpened 
-                              ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" 
-                              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
-                          }`}>
-                            {isClosingSoon 
-                              ? `Closing in ${daysUntilClose} ${daysUntilClose === 1 ? 'day' : 'days'}!` 
-                              : hasOpened ? "Applications Open" : "Opening Soon"}
-                          </span>
+                      <Card key={uni.id} className="overflow-hidden border transition-all duration-300 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5 group">
+                        <div className="flex flex-col sm:flex-row">
+                          {/* Left side info */}
+                          <div className="p-5 flex-1 flex flex-row items-center gap-4">
+                            <UniversityLogo
+                              universityId={uni.id}
+                              alt={`${uni.name} logo`}
+                              className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain transition-transform duration-300 group-hover:scale-105"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <CardTitle className="text-lg sm:text-xl font-bold transition-colors duration-200 group-hover:text-primary">{uni.name}</CardTitle>
+                              <div className="flex flex-wrap items-center gap-2.5 mt-2">
+                                <p className={`text-sm sm:text-base font-semibold ${brandColorClass}`}>
+                                  {displayDate}
+                                </p>
+
+                                {daysRemaining !== null && daysRemaining > 0 ? (
+                                  <Badge 
+                                    variant="outline" 
+                                    className={`gap-1.5 shadow-xs py-1 transition-all ${
+                                      daysRemaining < 7 
+                                        ? "animate-pulse ring-2 ring-rose-500/60 border-rose-500 bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold shadow-rose-500/20" 
+                                        : "bg-background"
+                                    }`}
+                                  >
+                                    <Clock className={`h-3 w-3 ${daysRemaining < 7 ? "text-rose-500 animate-spin [animation-duration:3s]" : "text-rose-500 animate-pulse"}`} />
+                                    <span className="text-xs font-semibold">{daysRemaining} days remaining {daysRemaining < 7 && "⚠️"}</span>
+                                  </Badge>
+                                ) : daysRemaining === 0 ? (
+                                  <Badge variant="destructive" className="gap-1.5 shadow-xs py-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span className="text-xs font-bold">Exam Today!</span>
+                                  </Badge>
+                                ) : daysRemaining !== null && daysRemaining < 0 ? (
+                                  <Badge variant="secondary" className="gap-1.5 shadow-xs py-1">
+                                    <Clock className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs">Exam Passed</span>
+                                  </Badge>
+                                ) : (
+                                  <Badge variant="outline" className="gap-1.5 bg-background shadow-xs py-1">
+                                    <Clock className="h-3 w-3 text-muted-foreground" />
+                                    <span className="text-xs">TBA</span>
+                                  </Badge>
+                                )}
+
+                                {uni.id !== 'upcat' && (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setEditingDateUni({ id: uni.id, name: uni.name, defaultDate: uni.date || 'TBA' })}
+                                    className="h-7 text-xs px-2.5 font-medium gap-1 text-muted-foreground hover:text-foreground hover:bg-muted border border-border/50 rounded-md cursor-pointer"
+                                    title="Set or update your specific exam date"
+                                  >
+                                    <Calendar className="h-3 w-3 text-primary" />
+                                    <span>{customDate ? "Change Date" : "Set Date"}</span>
+                                  </Button>
+                                )}
+                              </div>
+                              {uni.description && (
+                                <CardDescription className="mt-2 text-sm">
+                                  {uni.description}
+                                </CardDescription>
+                              )}
+                            </div>
+                          </div>
+                          
+                          {/* Right side action */}
+                          <div className="p-5 flex items-center justify-center bg-muted/30 sm:w-48 shrink-0 sm:border-l">
+                            {isEditMode ? (
+                              <div className="flex flex-col gap-2 w-full">
+                                {uni.id !== 'upcat' && (
+                                  <Button 
+                                    variant="outline"
+                                    size="sm" 
+                                    className="w-full gap-1.5 text-xs h-8 font-semibold"
+                                    onClick={() => setEditingDateUni({ id: uni.id, name: uni.name, defaultDate: uni.date || 'TBA' })}
+                                  >
+                                    <Calendar className="h-3.5 w-3.5 text-primary" />
+                                    Edit Date
+                                  </Button>
+                                )}
+                                <Button 
+                                  variant="destructive"
+                                  size="sm" 
+                                  className="w-full gap-1.5 text-xs h-8 font-semibold shadow-xs transition-transform duration-200 active:scale-95"
+                                  onClick={() => handleRemoveUniversity(uni.id)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Remove
+                                </Button>
+                              </div>
+                            ) : (
+                              <Link href={`/university/${uni.id}`} className="w-full">
+                                <Button 
+                                  size="default" 
+                                  className="w-full gap-2 text-sm h-10 font-semibold shadow-xs transition-all duration-200 hover:scale-[1.02] active:scale-95 cursor-pointer group/btn"
+                                >
+                                  Study Now
+                                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover/btn:translate-x-1" />
+                                </Button>
+                              </Link>
+                            )}
+                          </div>
                         </div>
-                        <p className="text-xs font-semibold text-muted-foreground">
-                          {item.fullName}
-                        </p>
-                        <div className="grid grid-cols-2 gap-2 pt-1 border-t border-muted/30 text-[11px]">
-                          <div>
-                            <span className="text-muted-foreground block text-[10px] uppercase">Open Date</span>
-                            <span className="font-semibold text-foreground">{item.openStr}</span>
-                          </div>
-                          <div>
-                            <span className="text-muted-foreground block text-[10px] uppercase">Close Date</span>
-                            <span className="font-semibold text-foreground">{item.closeStr}</span>
-                          </div>
-                        </div>
-                        {item.applyUrl && (
-                          <div className="pt-2 border-t border-muted/30">
-                            <a
-                              href={item.applyUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="block w-full"
-                            >
-                              <Button size="sm" variant="outline" className="w-full gap-1.5 text-xs font-semibold h-8 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer">
-                                Apply Now
-                                <ExternalLink className="h-3.5 w-3.5" />
-                              </Button>
-                            </a>
-                          </div>
-                        )}
-                      </div>
+                      </Card>
                     );
                   })
                 )}
-              </CardContent>
-            </Card>
-
-          </div>
-
-          {/* Right Column: My Universities */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-bold tracking-tight">My Universities</h2>
-              <div className="flex items-center gap-2">
-                {filteredUniversities.length > 0 && (
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => setIsEditMode(!isEditMode)} 
-                    className="gap-2 h-9 text-xs sm:text-sm font-semibold border-muted-foreground/20 hover:bg-muted"
-                  >
-                    <Edit3 className="h-4 w-4 text-muted-foreground" />
-                    {isEditMode ? "Done" : "Edit"}
-                  </Button>
-                )}
-                <Button onClick={() => setAddDialogOpen(true)} size="sm" className="gap-2 h-9 text-xs sm:text-sm font-semibold">
-                  <Plus className="h-4 w-4" />
-                  Add
-                </Button>
               </div>
             </div>
 
-            <div className="grid gap-4">
-              {filteredUniversities.length === 0 ? (
-                <Card className="border border-dashed p-8 text-center flex flex-col items-center justify-center space-y-4 bg-muted/5 py-12">
-                  <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
-                    <GraduationCap className="h-6 w-6" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <CardTitle className="text-lg font-bold">No Universities Added</CardTitle>
-                    <CardDescription className="text-sm max-w-sm mx-auto">
-                      Select universities you want to prepare for to start studying.
-                    </CardDescription>
-                  </div>
-                  <Button onClick={() => setAddDialogOpen(true)} className="gap-2 font-semibold transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer">
-                    <Plus className="h-4 w-4" />
-                    Add a University
-                  </Button>
-                </Card>
-              ) : (
-                filteredUniversities.map((uni) => (
-                  <Card key={uni.id} className="overflow-hidden border transition-all hover:border-primary/50 shadow-sm">
-                    <div className="flex flex-col sm:flex-row">
-                      {/* Left side info */}
-                      <div className="p-5 flex-1 flex flex-row items-center gap-4">
-                        {uni.id === 'upcat' ? (
-                          <img 
-                            src={`${import.meta.env.BASE_URL}up-logo.png`} 
-                            alt="UP logo" 
-                            className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
-                          />
-                        ) : uni.id === 'bu' ? (
-                          <img 
-                            src={`${import.meta.env.BASE_URL}bu-logo.png`} 
-                            alt="BU logo" 
-                            className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 object-contain" 
-                          />
-                        ) : (
-                          <div className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 flex items-center justify-center bg-muted rounded-full">
-                            <GraduationCap className="h-8 w-8 text-muted-foreground" />
-                          </div>
-                        )}
-                        <div className="flex-1 min-w-0">
-                          <CardTitle className="text-lg sm:text-xl font-bold">{uni.name}</CardTitle>
-                          <div className="flex flex-wrap items-center gap-3 mt-2">
-                            <p className={uni.id === 'bu' ? "text-sm sm:text-base font-semibold text-[#009cb8]" : "text-sm sm:text-base font-semibold text-primary"}>
-                              {uni.date || "TBA"}
-                            </p>
-                            {uni.id === 'upcat' ? (
-                              <Badge 
-                                variant="outline" 
-                                className={`gap-1.5 shadow-sm py-1 transition-all ${
-                                  upcatDaysLeft < 7 
-                                    ? "animate-pulse ring-2 ring-rose-500/60 border-rose-500 bg-rose-500/15 text-rose-600 dark:text-rose-400 font-extrabold shadow-rose-500/20" 
-                                    : "bg-background"
-                                }`}
-                              >
-                                <Clock className={`h-3 w-3 ${upcatDaysLeft < 7 ? "text-rose-500 animate-spin [animation-duration:3s]" : "text-rose-500 animate-pulse"}`} />
-                                <span className="text-xs">{upcatDaysLeft} days remaining {upcatDaysLeft < 7 && "⚠️"}</span>
-                              </Badge>
-                            ) : uni.date ? (
-                              <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
-                                <Clock className="h-3 w-3 text-primary" />
-                                <span className="text-xs">{uni.date}</span>
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="gap-1.5 bg-background shadow-sm py-1">
-                                <Clock className="h-3 w-3 text-primary" />
-                                <span className="text-xs">TBA</span>
-                              </Badge>
-                            )}
-                          </div>
-                          {uni.description && (
-                            <CardDescription className="mt-2 text-sm">
-                              {uni.description}
-                            </CardDescription>
-                          )}
-                        </div>
-                      </div>
-                      
-                      {/* Right side action */}
-                      <div className="p-5 flex items-center justify-center bg-muted/30 sm:w-48 shrink-0 sm:border-l">
-                        {isEditMode ? (
-                          <Button 
-                            variant="destructive"
-                            size="default" 
-                            className="w-full gap-2 text-sm h-10 font-semibold shadow-sm"
-                            onClick={() => handleRemoveUniversity(uni.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Remove
-                          </Button>
-                        ) : (
-                          <Link href={`/university/${uni.id}`} className="w-full">
-                            <Button 
-                              size="default" 
-                              className="w-full gap-2 text-sm h-10 font-semibold shadow-sm transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer"
-                            >
-                              Study Now
-                              <ArrowRight className="h-4 w-4" />
-                            </Button>
-                          </Link>
-                        )}
+            {/* Application Timelines section moved below My Universities */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="text-2xl font-bold tracking-tight">Application Timelines</h2>
+                <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 font-extrabold px-2.5 py-1 text-xs">
+                  S.Y. 2027–2028
+                </Badge>
+              </div>
+              <Card className="border border-border bg-card shadow-sm overflow-hidden">
+                <CardHeader className="pb-3 bg-muted/20 dark:bg-muted/10 border-b">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-5 w-5 text-indigo-500" />
+                      <div>
+                        <CardTitle className="text-sm font-bold">Admission Calendars</CardTitle>
+                        <CardDescription className="text-xs">University application dates & deadlines for S.Y. 2027-2028</CardDescription>
                       </div>
                     </div>
-                  </Card>
-                ))
-              )}
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4">
+                  {visibleTimelines.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-4">No active university application periods.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                      {visibleTimelines.map((item) => {
+                        const today = new Date();
+                        const hasOpened = today >= item.openDate;
+                        const daysUntilClose = item.closeDate ? Math.ceil((item.closeDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                        const isClosingSoon = daysUntilClose !== null && daysUntilClose <= 15 && daysUntilClose >= 0;
+                        const isCritical = daysUntilClose !== null && daysUntilClose <= 7 && daysUntilClose >= 0;
+
+                        return (
+                          <div key={item.id} className={`p-3.5 rounded-lg border bg-muted/10 space-y-2 flex flex-col justify-between transition-all ${
+                            isCritical
+                              ? "border-rose-500/50 ring-1 ring-rose-500/30 bg-rose-500/5"
+                              : isClosingSoon
+                              ? "border-amber-500/50 ring-1 ring-amber-500/30 bg-amber-500/5"
+                              : "border-muted-foreground/10"
+                          }`}>
+                            <div className="space-y-2">
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
+                                  {item.id.toUpperCase()}
+                                </span>
+                                <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${
+                                  isCritical
+                                    ? "bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/40 animate-pulse"
+                                    : isClosingSoon
+                                    ? "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/40"
+                                    : hasOpened 
+                                    ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20" 
+                                    : "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20"
+                                }`}>
+                                  {isClosingSoon 
+                                    ? `Closing in ${daysUntilClose} ${daysUntilClose === 1 ? 'day' : 'days'}!` 
+                                    : hasOpened ? "Applications Open" : "Opening Soon"}
+                                </span>
+                              </div>
+                              <p className="text-xs font-semibold text-muted-foreground">
+                                {item.fullName}
+                              </p>
+                              <div className="grid grid-cols-2 gap-2 pt-1 border-t border-muted/30 text-[11px]">
+                                <div>
+                                  <span className="text-muted-foreground block text-[10px] uppercase">Open Date</span>
+                                  <span className="font-semibold text-foreground">{item.openStr}</span>
+                                </div>
+                                <div>
+                                  <span className="text-muted-foreground block text-[10px] uppercase">Close Date</span>
+                                  <span className="font-semibold text-foreground">{item.closeStr}</span>
+                                </div>
+                              </div>
+                            </div>
+                            {item.applyUrl && (
+                              <div className="pt-2 border-t border-muted/30 mt-2">
+                                <a
+                                  href={item.applyUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block w-full"
+                                >
+                                  <Button size="sm" variant="outline" className="w-full gap-1.5 text-xs font-semibold h-8 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 transition-transform duration-200 hover:scale-105 active:scale-95 cursor-pointer">
+                                    Apply Now
+                                    <ExternalLink className="h-3.5 w-3.5" />
+                                  </Button>
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
             </div>
           </div>
         </div>
@@ -579,68 +769,164 @@ export default function Dashboard() {
       </Dialog>
 
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
               <Plus className="h-5 w-5 text-primary" />
               Add University
             </DialogTitle>
             <DialogDescription>
-              Choose a university to add to your personalized dashboard goals.
+              Choose a university to add to your personalized study goals. You can set your specific exam date now or update it anytime later.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3.5 my-4">
+          <div className="space-y-3.5 my-3 max-h-[60vh] overflow-y-auto pr-1">
             {UNIVERSITIES.map((uni) => {
               const isAdded = addedUniIds.includes(uni.id);
+              const customDate = userExamDates[uni.id];
+              const draftDate = addDialogDates[uni.id] ?? "";
+              const isExpanded = expandedAddDateUni === uni.id;
+
               return (
-                <div key={uni.id} className="flex items-center justify-between p-3.5 rounded-lg border bg-muted/20 hover:bg-muted/30 transition-colors">
-                  <div className="flex items-center gap-3">
-                    {uni.id === 'upcat' ? (
-                      <img 
-                        src={`${import.meta.env.BASE_URL}up-logo.png`} 
-                        alt="UP logo" 
-                        className="h-10 w-10 shrink-0 object-contain" 
+                <div key={uni.id} className="p-3.5 rounded-lg border bg-muted/20 hover:bg-muted/30 transition-all duration-200 space-y-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <UniversityLogo
+                        universityId={uni.id}
+                        alt={`${uni.name} logo`}
+                        className="h-10 w-10 shrink-0 object-contain"
                       />
-                    ) : uni.id === 'bu' ? (
-                      <img 
-                        src={`${import.meta.env.BASE_URL}bu-logo.png`} 
-                        alt="BU logo" 
-                        className="h-10 w-10 shrink-0 object-contain" 
-                      />
-                    ) : (
-                      <div className="h-10 w-10 shrink-0 flex items-center justify-center bg-muted rounded-full">
-                        <GraduationCap className="h-5 w-5 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <h4 className="text-sm font-bold text-foreground leading-snug">{uni.name}</h4>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-xs text-muted-foreground">
+                            {customDate ? `Exam: ${formatCustomDateDisplay(customDate)}` : (uni.date ? `Schedule: ${uni.date}` : "Schedule: TBA")}
+                          </span>
+                        </div>
                       </div>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-bold text-foreground leading-snug">{uni.name}</h4>
-                      <p className="text-xs text-muted-foreground mt-0.5">{uni.date || "TBA"}</p>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {!isAdded ? (
+                        <Button 
+                          size="sm" 
+                          variant="default"
+                          className="font-semibold h-8 text-xs cursor-pointer shadow-xs transition-transform active:scale-95 gap-1.5"
+                          onClick={async () => {
+                            const newIds = [...addedUniIds, uni.id];
+                            setAddedUniIds(newIds);
+                            await saveUserAddedUniversities(user, newIds);
+                            
+                            if (draftDate.trim()) {
+                              await saveSingleExamDate(user, uni.id, draftDate.trim());
+                            }
+                            
+                            toast({
+                              title: "University Added",
+                              description: draftDate.trim() 
+                                ? `${uni.name} added with exam date: ${formatCustomDateDisplay(draftDate)}.` 
+                                : `${uni.name} has been added to your target universities.`,
+                            });
+                          }}
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          Add
+                        </Button>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          {uni.id !== 'upcat' && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="font-semibold h-8 text-xs gap-1 cursor-pointer"
+                              onClick={() => {
+                                setAddDialogOpen(false);
+                                setEditingDateUni({ id: uni.id, name: uni.name, defaultDate: uni.date || "TBA" });
+                              }}
+                            >
+                              <Calendar className="h-3.5 w-3.5 text-primary" />
+                              {customDate ? "Edit Date" : "Set Date"}
+                            </Button>
+                          )}
+                          <Button 
+                            size="sm" 
+                            variant="ghost"
+                            className="font-semibold h-8 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive cursor-pointer"
+                            onClick={() => handleRemoveUniversity(uni.id)}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <Button 
-                    size="sm" 
-                    variant={isAdded ? "outline" : "default"}
-                    disabled={isAdded}
-                    className="font-semibold cursor-pointer h-8"
-                    onClick={() => {
-                      const newIds = [...addedUniIds, uni.id];
-                      setAddedUniIds(newIds);
-                      saveUserAddedUniversities(user, newIds);
-                      toast({
-                        title: "University Added",
-                        description: `${uni.id === 'upcat' ? 'UPCAT' : 'BUCET'} has been added to your universities.`,
-                      });
-                      setAddDialogOpen(false);
-                    }}
-                  >
-                    {isAdded ? "Added" : "Add"}
-                  </Button>
+
+                  {/* Optional Specific Exam Date Input when adding or modifying */}
+                  {!isAdded && uni.id !== 'upcat' && (
+                    <div className="pt-2 border-t border-muted/40 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5 text-primary shrink-0" />
+                        <span>Set exam date (optional):</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="date"
+                          value={draftDate}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setAddDialogDates((prev) => ({ ...prev, [uni.id]: val }));
+                          }}
+                          className="h-7 w-36 text-xs"
+                          placeholder="Select date"
+                        />
+                        {draftDate && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setAddDialogDates((prev) => ({ ...prev, [uni.id]: "" }))}
+                            className="h-7 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
+          <DialogFooter className="sm:justify-between items-center text-xs text-muted-foreground pt-2">
+            <span>You can adjust your exam date at any time on the dashboard.</span>
+            <Button variant="outline" size="sm" onClick={() => setAddDialogOpen(false)} className="text-xs">
+              Done
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Reusable Set Exam Date Dialog */}
+      {editingDateUni && (
+        <SetExamDateDialog
+          open={Boolean(editingDateUni)}
+          onOpenChange={(open) => {
+            if (!open) setEditingDateUni(null);
+          }}
+          universityId={editingDateUni.id}
+          universityName={editingDateUni.name}
+          currentDate={userExamDates[editingDateUni.id] || ""}
+          defaultDate={editingDateUni.defaultDate}
+          onSaveDate={async (newDateStr) => {
+            await saveSingleExamDate(user, editingDateUni.id, newDateStr);
+            toast({
+              title: newDateStr ? "Exam Date Updated" : "Exam Date Reset",
+              description: newDateStr 
+                ? `Exam date for ${editingDateUni.name} set to ${formatCustomDateDisplay(newDateStr)}.`
+                : `Exam date for ${editingDateUni.name} reset to default/TBA.`,
+            });
+          }}
+        />
+      )}
     </Layout>
   );
 }
