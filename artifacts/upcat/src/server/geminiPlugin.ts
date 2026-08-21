@@ -96,7 +96,8 @@ export function geminiApiPlugin(): Plugin {
       try {
         const parsed = JSON.parse(body || "{}");
         const { message, history } = parsed;
-        const reply = await handleGeminiChat(message, history);
+        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+        const reply = await handleGeminiChat(message, history, customApiKey);
 
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
@@ -136,7 +137,8 @@ export function geminiApiPlugin(): Plugin {
       try {
         const parsed = JSON.parse(body || "{}");
         const { mistakes = [], count = 5 } = parsed;
-        const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count);
+        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+        const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count, customApiKey);
 
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
@@ -175,7 +177,8 @@ export function geminiApiPlugin(): Plugin {
     req.on("end", async () => {
       try {
         const parsed = JSON.parse(body || "{}");
-        const questions = await handleExtractQuestionsFromPdfOrText(parsed);
+        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+        const questions = await handleExtractQuestionsFromPdfOrText(parsed, customApiKey);
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ questions, count: questions.length }));
@@ -213,7 +216,8 @@ export function geminiApiPlugin(): Plugin {
     req.on("end", async () => {
       try {
         const parsed = JSON.parse(body || "{}");
-        const questions = await handleGenerateSubjectQuestions(parsed);
+        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+        const questions = await handleGenerateSubjectQuestions(parsed, customApiKey);
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify({ questions, count: questions.length }));
@@ -251,7 +255,8 @@ export function geminiApiPlugin(): Plugin {
     req.on("end", async () => {
       try {
         const parsed = JSON.parse(body || "{}");
-        const result = await handleExplainQuestionError(parsed);
+        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+        const result = await handleExplainQuestionError(parsed, customApiKey);
         res.statusCode = 200;
         res.setHeader("Content-Type", "application/json");
         res.end(JSON.stringify(result));

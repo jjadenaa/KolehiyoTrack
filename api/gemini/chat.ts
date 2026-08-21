@@ -16,7 +16,13 @@ export default async function handler(req: any, res: any) {
       try { body = JSON.parse(body); } catch {}
     }
     const { message, history } = body || {};
-    const reply = await handleGeminiChat(message, history);
+    const apiKey =
+      (req.headers && (req.headers["x-gemini-api-key"] || req.headers["x-api-key"])) ||
+      body?.apiKey ||
+      process.env.GEMINI_API_KEY ||
+      process.env.VITE_GEMINI_API_KEY;
+
+    const reply = await handleGeminiChat(message, history, typeof apiKey === "string" ? apiKey : undefined);
     return res.status(200).json({ reply });
   } catch (err: any) {
     console.error("Vercel Chat API Error:", err);

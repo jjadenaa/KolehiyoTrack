@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { SmartText } from "@/components/SmartText";
 import { AICreditsBadge } from "@/components/AICreditsBadge";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
+import { getStoredGeminiApiKey, getAIHeaders } from "@/lib/geminiKey";
 import {
   Sparkles,
   Bot,
@@ -87,9 +88,10 @@ export function AskAIQuestionTutor({ answer, questionNumber }: AskAIQuestionTuto
     setIsLoading(true);
 
     try {
+      const storedKey = getStoredGeminiApiKey();
       const res = await fetch("/api/gemini/explain-error", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAIHeaders(),
         body: JSON.stringify({
           questionText: answer.questionText,
           choices: answer.choices,
@@ -98,6 +100,7 @@ export function AskAIQuestionTutor({ answer, questionNumber }: AskAIQuestionTuto
           subject: answer.subject,
           explanation: answer.explanation,
           userQuery: textToSend,
+          apiKey: storedKey || undefined,
         }),
       });
 

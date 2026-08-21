@@ -11,6 +11,7 @@ import { SUBJECT_LABELS, getAvailableSubjectsForUniversity, getDefaultItemCounts
 import { SmartText } from "@/components/SmartText";
 import { AICreditsBadge } from "@/components/AICreditsBadge";
 import { checkCanUseAI, recordAIUsage } from "@/lib/aiQuota";
+import { getStoredGeminiApiKey, getAIHeaders } from "@/lib/geminiKey";
 import { extractTextFromPdfFile } from "@/lib/pdfExtractor";
 import { buildAIPromptForUniversity } from "@/lib/promptCalibrations";
 import {
@@ -316,10 +317,14 @@ export function AIQuestionBankStudio({
 
       setScanProgress({ status: "Extracting all questions, choices, and KaTeX solutions with AI...", percent: 65, foundCount: 0 });
 
+      const storedKey = getStoredGeminiApiKey();
       const res = await fetch("/api/gemini/extract-pdf", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        headers: getAIHeaders(),
+        body: JSON.stringify({
+          ...payload,
+          apiKey: storedKey || undefined,
+        }),
       });
 
       let data: any = {};
@@ -447,15 +452,17 @@ export function AIQuestionBankStudio({
     setSuccessMessage(null);
 
     try {
+      const storedKey = getStoredGeminiApiKey();
       const res = await fetch("/api/gemini/generate-subject-questions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: getAIHeaders(),
         body: JSON.stringify({
           subject: genSubject,
           universityId,
           topic: genTopic.trim() || undefined,
           count: genCount,
           difficulty: genDifficulty,
+          apiKey: storedKey || undefined,
         }),
       });
 

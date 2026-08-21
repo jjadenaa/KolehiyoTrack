@@ -51,31 +51,37 @@ export default async function handler(req: any, res: any) {
   const url = req.url || "";
   try {
     const body: any = await parseBody(req);
+    const apiKey =
+      (req.headers && (req.headers["x-gemini-api-key"] || req.headers["x-api-key"])) ||
+      body?.apiKey ||
+      process.env.GEMINI_API_KEY ||
+      process.env.VITE_GEMINI_API_KEY;
+    const keyStr = typeof apiKey === "string" ? apiKey : undefined;
 
     if (url.includes("extract-pdf")) {
-      const questions = await handleExtractQuestionsFromPdfOrText(body || {});
+      const questions = await handleExtractQuestionsFromPdfOrText(body || {}, keyStr);
       return res.status(200).json({ questions, count: questions.length });
     }
 
     if (url.includes("generate-subject-questions")) {
-      const questions = await handleGenerateSubjectQuestions(body || {});
+      const questions = await handleGenerateSubjectQuestions(body || {}, keyStr);
       return res.status(200).json({ questions, count: questions.length });
     }
 
     if (url.includes("explain-error")) {
-      const result = await handleExplainQuestionError(body || {});
+      const result = await handleExplainQuestionError(body || {}, keyStr);
       return res.status(200).json(result);
     }
 
     if (url.includes("mistake-quiz")) {
       const { mistakes = [], count = 5 } = body || {};
-      const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count);
+      const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count, keyStr);
       return res.status(200).json({ questions });
     }
 
     if (url.includes("chat") || url.includes("gemini")) {
       const { message, history } = body || {};
-      const reply = await handleGeminiChat(message, history);
+      const reply = await handleGeminiChat(message, history, keyStr);
       return res.status(200).json({ reply });
     }
 

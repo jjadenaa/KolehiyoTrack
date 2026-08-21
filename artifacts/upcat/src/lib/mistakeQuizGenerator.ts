@@ -1,6 +1,7 @@
 import { Question } from "@/types/session";
 import { MistakeItem } from "./mistakeDiary";
 import { getBankQuestions, BankQuestion } from "./questionBank";
+import { getStoredGeminiApiKey, getAIHeaders } from "./geminiKey";
 
 export interface TargetedQuizOptions {
   mode: "retake" | "ai_generated";
@@ -59,10 +60,11 @@ export async function generateTargetedQuiz(
 
   // 2. AI GENERATED MODE
   try {
+    const storedKey = getStoredGeminiApiKey();
     const apiPath = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/gemini/mistake-quiz`;
     const response = await fetch(apiPath, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAIHeaders(),
       body: JSON.stringify({
         mistakes: targetMistakes.slice(0, 10).map((m) => ({
           subject: m.subject,
@@ -71,6 +73,7 @@ export async function generateTargetedQuiz(
           explanation: m.explanation,
         })),
         count,
+        apiKey: storedKey || undefined,
       }),
     });
 

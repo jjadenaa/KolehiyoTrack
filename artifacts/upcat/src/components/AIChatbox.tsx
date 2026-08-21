@@ -22,6 +22,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { SmartText } from "./SmartText";
 import { AICreditsBadge } from "./AICreditsBadge";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
+import { getStoredGeminiApiKey, getAIHeaders } from "@/lib/geminiKey";
 
 interface Message {
   id: string;
@@ -133,36 +134,31 @@ export function AIChatbox() {
           text: m.text,
         }));
 
+      const storedKey = getStoredGeminiApiKey();
       const apiPath = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/gemini/chat`;
       const res = await fetch(apiPath, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: getAIHeaders(),
         body: JSON.stringify({
           message: query,
           history,
+          apiKey: storedKey || undefined,
         }),
       });
 
       let data: any = {};
-      const contentType = res.headers.get("content-type") || "";
-      if (contentType.includes("application/json")) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        if (text.startsWith("<!DOCTYPE") || text.includes("<html")) {
+      const responseText = await res.text();
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        if (responseText.startsWith("<!DOCTYPE") || responseText.includes("<html")) {
           throw new Error("API endpoint route returned HTML instead of JSON. Ensure the server is running properly.");
-        }
-        try {
-          data = JSON.parse(text);
-        } catch {
-          throw new Error(`Server returned unexpected response (${res.status}).`);
         }
       }
 
       if (!res.ok) {
-        throw new Error(data.error || "Failed to get AI response.");
+        const errorDetail = data?.error || (res.status === 429 ? "Rate limit reached. Please wait a few seconds." : `Server returned error (${res.status}).`);
+        throw new Error(errorDetail);
       }
 
       // Record successful AI quota consumption

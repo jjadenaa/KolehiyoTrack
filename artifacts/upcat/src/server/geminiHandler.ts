@@ -285,17 +285,19 @@ async function generateWithRetry(
   throw lastError;
 }
 
-export async function handleGeminiChat(message: string, history: any[] = []): Promise<string> {
-  if (!message || typeof message !== "string") {
-    throw new Error("Message string is required.");
-  }
+function getGeminiClient(customApiKey?: string): GoogleGenAI {
+  const apiKey =
+    customApiKey ||
+    process.env.GEMINI_API_KEY ||
+    process.env.VITE_GEMINI_API_KEY;
 
-  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is missing on server.");
+    throw new Error(
+      "GEMINI_API_KEY is not configured. Please set the GEMINI_API_KEY environment variable in your project settings or provide an API key."
+    );
   }
 
-  const ai = new GoogleGenAI({
+  return new GoogleGenAI({
     apiKey,
     httpOptions: {
       headers: {
@@ -303,6 +305,14 @@ export async function handleGeminiChat(message: string, history: any[] = []): Pr
       },
     },
   });
+}
+
+export async function handleGeminiChat(message: string, history: any[] = [], customApiKey?: string): Promise<string> {
+  if (!message || typeof message !== "string") {
+    throw new Error("Message string is required.");
+  }
+
+  const ai = getGeminiClient(customApiKey);
 
   const systemInstruction = `You are "Isko AI" (or "Iska AI"), an ultra-fast, brilliant Philippine College Entrance Test (UPCAT, ACET, DCAT, USTET, PLMAT, BUCET) tutor and academic companion.
 
@@ -345,21 +355,10 @@ Core Guidelines:
 
 export async function handleGenerateMistakeFollowUpQuiz(
   mistakes: Array<{ subject: string; topic?: string; questionText: string; explanation?: string }>,
-  count: number = 5
+  count: number = 5,
+  customApiKey?: string
 ): Promise<any[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is missing on server.");
-  }
-
-  const ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
+  const ai = getGeminiClient(customApiKey);
 
   const sampleConcepts = mistakes.slice(0, 8).map((m, idx) => 
     `Concept ${idx + 1}: Subject: ${m.subject}, Topic: ${m.topic || "General"}, Question: ${m.questionText.slice(0, 160)}, Explanation note: ${m.explanation?.slice(0, 120) || "N/A"}`
@@ -565,20 +564,9 @@ export async function handleExtractQuestionsFromPdfOrText(params: {
   subjectHint?: string;
   universityId?: string;
   batchInfo?: { current: number; total: number };
-}): Promise<any[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is missing on server.");
-  }
-
-  const ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
+  apiKey?: string;
+}, customApiKey?: string): Promise<any[]> {
+  const ai = getGeminiClient(customApiKey || params.apiKey);
 
   // 1. Check if we have raw text content provided
   if (params.textContent && params.textContent.trim().length > 0) {
@@ -749,20 +737,9 @@ export async function handleGenerateSubjectQuestions(params: {
   topic?: string;
   count?: number;
   difficulty?: string;
-}): Promise<any[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is missing on server.");
-  }
-
-  const ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
+  apiKey?: string;
+}, customApiKey?: string): Promise<any[]> {
+  const ai = getGeminiClient(customApiKey || params.apiKey);
 
   const count = Math.min(Math.max(1, params.count || 5), 10);
   const prompt = `You are a premier test designer for Philippine College Entrance Tests (${params.universityId.toUpperCase()} standards).
@@ -823,25 +800,14 @@ export async function handleExplainQuestionError(params: {
   topic?: string;
   explanation?: string;
   userQuery?: string;
-}): Promise<{
+  apiKey?: string;
+}, customApiKey?: string): Promise<{
   errorAnalysis: string;
   fastSolution: string;
   keyRuleOrShortcut: string;
   fullTutorResponse: string;
 }> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY environment variable is missing on server.");
-  }
-
-  const ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        "User-Agent": "aistudio-build",
-      },
-    },
-  });
+  const ai = getGeminiClient(customApiKey || params.apiKey);
 
   const choicesStr = params.choices
     ? params.choices.map((c) => `[${c.id}] ${c.text}`).join("\n")
