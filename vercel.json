@@ -1,13 +1,9 @@
 {
-  "buildCommand": "npm run build --workspace=@workspace/upcat",
-  "outputDirectory": "artifacts/upcat/dist/public",
+  "buildCommand": "npm run build --workspace=@workspace/upcat && rm -rf dist && cp -r artifacts/upcat/dist/public dist",
+  "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/artifacts/upcat/api/index.ts"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]
