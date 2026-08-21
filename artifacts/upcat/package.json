@@ -12,10 +12,17 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@google/genai": "^2.16.0",
+    "canvas-confetti": "^1.9.4",
+    "express": "^5.2.1",
     "firebase": "^11.9.1",
-    "katex": "^0.18.1"
+    "katex": "^0.18.1",
+    "pdfjs-dist": "^6.2.108"
   },
   "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/express": "^5.0.6",
+    "esbuild": "^0.28.2",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",

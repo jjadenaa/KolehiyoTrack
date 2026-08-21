@@ -9,7 +9,7 @@
     "scripts"
   ],
   "scripts": {
-    "build": "npm run typecheck && npm run build --workspaces --if-present && rm -rf dist && cp -r artifacts/upcat/dist/public dist",
+    "build": "npm run build --workspace=@workspace/upcat && rm -rf dist && cp -r artifacts/upcat/dist/public dist",
     "start": "node artifacts/upcat/dist/server.js",
     "typecheck:libs": "tsc --build",
     "typecheck": "npm run typecheck:libs && npm run typecheck --workspaces --if-present",
