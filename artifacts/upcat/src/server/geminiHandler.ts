@@ -271,8 +271,8 @@ async function generateWithRetry(
           continue;
         }
 
-        if (is503 || is429) {
-          console.warn(`[Gemini Handler] Model ${model} is currently overloaded. Trying next fallback candidate model...`);
+        if (is503 || is429 || errMsg.includes("404") || errMsg.includes("not found")) {
+          console.warn(`[Gemini Handler] Model ${model} failed (${errMsg}). Trying next fallback candidate model...`);
           break; // break inner attempt loop, advance to next fallback model
         }
 
@@ -289,16 +289,22 @@ function getGeminiClient(customApiKey?: string): GoogleGenAI {
   const apiKey =
     customApiKey ||
     process.env.GEMINI_API_KEY ||
-    process.env.VITE_GEMINI_API_KEY;
+    process.env.VITE_GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    process.env.API_KEY;
 
-  if (!apiKey) {
-    throw new Error(
-      "GEMINI_API_KEY is not configured. Please set the GEMINI_API_KEY environment variable in your project settings or provide an API key."
-    );
+  if (apiKey) {
+    return new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
   }
 
   return new GoogleGenAI({
-    apiKey,
     httpOptions: {
       headers: {
         "User-Agent": "aistudio-build",

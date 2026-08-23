@@ -17,50 +17,50 @@ const port = 3000;
 
 app.use(express.json({ limit: "50mb" }));
 
+const getApiKeyFromReq = (req: express.Request): string | undefined => {
+  const headerKey = (req.headers["x-gemini-api-key"] || req.headers["x-api-key"]) as string | undefined;
+  return headerKey || req.body?.apiKey || undefined;
+};
+
 const geminiRouteHandler = async (req: express.Request, res: express.Response) => {
   try {
     const { message, history } = req.body || {};
-    const reply = await handleGeminiChat(message, history);
+    const customApiKey = getApiKeyFromReq(req);
+    const reply = await handleGeminiChat(message, history, customApiKey);
     res.json({ reply });
   } catch (err: any) {
     console.error("Gemini API Express Error:", err);
     let errorMessage = "An error occurred while communicating with Gemini AI.";
-    if (err.status === 503) {
-       errorMessage = "The AI model is currently experiencing high demand. Please try again in a few moments.";
+    let status = 500;
+    if (err.status === 429 || String(err.message).includes("429")) {
+      status = 429;
+      errorMessage = "AI request limit reached. Please wait a moment before sending another request.";
+    } else if (err.status === 503 || String(err.message).includes("503")) {
+      status = 503;
+      errorMessage = "The AI model is currently experiencing high demand. Please try again in a few moments.";
     } else if (err.message) {
-        try {
-            const parsed = JSON.parse(err.message);
-            if (parsed.error && parsed.error.message) {
-                errorMessage = parsed.error.message;
-            } else {
-                 errorMessage = err.message;
-            }
-        } catch {
-            errorMessage = err.message;
-        }
+      errorMessage = err.message;
     }
-    res.status(500).json({ error: errorMessage });
+    res.status(status).json({ error: errorMessage });
   }
 };
 
 const geminiMistakeQuizHandler = async (req: express.Request, res: express.Response) => {
   try {
     const { mistakes = [], count = 5 } = req.body || {};
-    const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count);
+    const customApiKey = getApiKeyFromReq(req);
+    const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count, customApiKey);
     res.json({ questions });
   } catch (err: any) {
     console.error("Gemini Mistake Quiz Express Error:", err);
-    let errorMessage = "An error occurred while generating mistake follow-up quiz.";
-    if (err.message) {
-      errorMessage = err.message;
-    }
-    res.status(500).json({ error: errorMessage });
+    res.status(500).json({ error: err.message || "Failed to generate mistake follow-up quiz" });
   }
 };
 
 const geminiExtractPdfHandler = async (req: express.Request, res: express.Response) => {
   try {
-    const questions = await handleExtractQuestionsFromPdfOrText(req.body || {});
+    const customApiKey = getApiKeyFromReq(req);
+    const questions = await handleExtractQuestionsFromPdfOrText(req.body || {}, customApiKey);
     res.json({ questions, count: questions.length });
   } catch (err: any) {
     console.error("Gemini Extract PDF Express Error:", err);
@@ -70,7 +70,8 @@ const geminiExtractPdfHandler = async (req: express.Request, res: express.Respon
 
 const geminiGenerateSubjectQuestionsHandler = async (req: express.Request, res: express.Response) => {
   try {
-    const questions = await handleGenerateSubjectQuestions(req.body || {});
+    const customApiKey = getApiKeyFromReq(req);
+    const questions = await handleGenerateSubjectQuestions(req.body || {}, customApiKey);
     res.json({ questions, count: questions.length });
   } catch (err: any) {
     console.error("Gemini Generate Subject Questions Express Error:", err);
@@ -80,7 +81,8 @@ const geminiGenerateSubjectQuestionsHandler = async (req: express.Request, res: 
 
 const geminiExplainErrorHandler = async (req: express.Request, res: express.Response) => {
   try {
-    const result = await handleExplainQuestionError(req.body || {});
+    const customApiKey = getApiKeyFromReq(req);
+    const result = await handleExplainQuestionError(req.body || {}, customApiKey);
     res.json(result);
   } catch (err: any) {
     console.error("Gemini Explain Error Express Error:", err);
