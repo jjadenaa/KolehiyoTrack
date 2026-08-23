@@ -29,6 +29,8 @@ interface Message {
   role: "user" | "model";
   text: string;
   timestamp: Date;
+  isError?: boolean;
+  retryPrompt?: string;
 }
 
 const QUICK_PROMPTS = [
@@ -178,6 +180,8 @@ export function AIChatbox() {
         role: "model",
         text: `⚠️ **Notice:** ${err.message || "Failed to communicate with AI server. Please try again in a few moments."}`,
         timestamp: new Date(),
+        isError: true,
+        retryPrompt: query,
       };
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
@@ -304,7 +308,23 @@ export function AIChatbox() {
                     }`}
                   >
                     {msg.role === "model" ? (
-                      <SmartText text={msg.text} className="text-sm leading-relaxed" />
+                      <div>
+                        <SmartText text={msg.text} className="text-sm leading-relaxed" />
+                        {msg.isError && msg.retryPrompt && (
+                          <div className="mt-2 pt-2 border-t border-border/40 flex items-center gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleSend(msg.retryPrompt)}
+                              disabled={isLoading}
+                              className="h-7 text-xs gap-1.5 bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 cursor-pointer"
+                            >
+                              <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
+                              Retry Question
+                            </Button>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <p className="whitespace-pre-wrap">{msg.text}</p>
                     )}

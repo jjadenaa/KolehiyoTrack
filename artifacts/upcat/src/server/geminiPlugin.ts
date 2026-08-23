@@ -1,4 +1,5 @@
 import type { Plugin } from "vite";
+import express from "express";
 import {
   handleGeminiChat,
   handleGenerateMistakeFollowUpQuiz,
@@ -70,68 +71,30 @@ function normalizeErrorMessage(err: any): { statusCode: number; message: string 
   return { statusCode, message };
 }
 
-async function parseRequestBody(req: any): Promise<any> {
-  if (req.body && typeof req.body === "object") {
-    return req.body;
-  }
-  if (typeof req.body === "string" && req.body.length > 0) {
-    try {
-      return JSON.parse(req.body);
-    } catch {
-      return {};
-    }
-  }
-
+function readBody(req: any): Promise<any> {
   return new Promise((resolve) => {
-    let body = "";
-    let resolved = false;
-
-    const timeout = setTimeout(() => {
-      if (!resolved) {
-        resolved = true;
-        try {
-          resolve(body ? JSON.parse(body) : {});
-        } catch {
-          resolve({});
-        }
+    if (req.body && typeof req.body === "object") {
+      return resolve(req.body);
+    }
+    if (typeof req.body === "string" && req.body.length > 0) {
+      try {
+        return resolve(JSON.parse(req.body));
+      } catch {
+        return resolve({});
       }
-    }, 3000);
-
+    }
+    let body = "";
     req.on("data", (chunk: any) => {
       body += chunk;
     });
-
     req.on("end", () => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeout);
-        try {
-          resolve(body ? JSON.parse(body) : {});
-        } catch {
-          resolve({});
-        }
-      }
-    });
-
-    req.on("error", () => {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeout);
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch {
         resolve({});
       }
     });
-
-    if (req.complete || req.readableEnded) {
-      if (!resolved) {
-        resolved = true;
-        clearTimeout(timeout);
-        try {
-          resolve(body ? JSON.parse(body) : {});
-        } catch {
-          resolve({});
-        }
-      }
-    }
+    req.on("error", () => resolve({}));
   });
 }
 
@@ -153,7 +116,7 @@ export function geminiApiPlugin(): Plugin {
     }
 
     try {
-      const parsed = await parseRequestBody(req);
+      const parsed = await readBody(req);
       const { message, history } = parsed;
       const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
       const reply = await handleGeminiChat(message, history, customApiKey);
@@ -187,7 +150,7 @@ export function geminiApiPlugin(): Plugin {
     }
 
     try {
-      const parsed = await parseRequestBody(req);
+      const parsed = await readBody(req);
       const { mistakes = [], count = 5 } = parsed;
       const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
       const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count, customApiKey);
@@ -221,7 +184,7 @@ export function geminiApiPlugin(): Plugin {
     }
 
     try {
-      const parsed = await parseRequestBody(req);
+      const parsed = await readBody(req);
       const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
       const questions = await handleExtractQuestionsFromPdfOrText(parsed, customApiKey);
       res.statusCode = 200;
@@ -253,7 +216,7 @@ export function geminiApiPlugin(): Plugin {
     }
 
     try {
-      const parsed = await parseRequestBody(req);
+      const parsed = await readBody(req);
       const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
       const questions = await handleGenerateSubjectQuestions(parsed, customApiKey);
       res.statusCode = 200;
@@ -285,7 +248,7 @@ export function geminiApiPlugin(): Plugin {
     }
 
     try {
-      const parsed = await parseRequestBody(req);
+      const parsed = await readBody(req);
       const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
       const result = await handleExplainQuestionError(parsed, customApiKey);
       res.statusCode = 200;
