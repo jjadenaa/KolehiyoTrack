@@ -16,11 +16,13 @@ import {
   HelpCircle,
   Lightbulb,
   AlertTriangle,
+  Key,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { SmartText } from "./SmartText";
 import { AICreditsBadge } from "./AICreditsBadge";
+import { AIKeyModal } from "./AIKeyModal";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
 import { getStoredGeminiApiKey, getAIHeaders } from "@/lib/geminiKey";
 
@@ -245,6 +247,9 @@ export function AIChatbox() {
 
         <div className="flex items-center gap-2">
           <AICreditsBadge compact className="hidden sm:inline-flex" />
+          <div onClick={(e) => e.stopPropagation()}>
+            <AIKeyModal />
+          </div>
           {messages.length > 1 && (
             <Button
               variant="ghost"

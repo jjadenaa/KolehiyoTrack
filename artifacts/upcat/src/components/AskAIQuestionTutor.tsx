@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SmartText } from "@/components/SmartText";
 import { AICreditsBadge } from "@/components/AICreditsBadge";
+import { AIKeyModal } from "@/components/AIKeyModal";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
 import { getStoredGeminiApiKey, getAIHeaders } from "@/lib/geminiKey";
 import {
@@ -191,6 +192,7 @@ export function AskAIQuestionTutor({ answer, questionNumber }: AskAIQuestionTuto
 
             <div className="flex items-center gap-2">
               <AICreditsBadge compact />
+              <AIKeyModal />
               <Button
                 variant="ghost"
                 size="sm"
