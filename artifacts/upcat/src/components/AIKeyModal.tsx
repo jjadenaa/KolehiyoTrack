@@ -8,7 +8,10 @@ import {
   ShieldCheck, 
   AlertCircle,
   Eye,
-  EyeOff
+  EyeOff,
+  Loader2,
+  CheckCircle2,
+  XCircle
 } from "lucide-react";
 import {
   Dialog,
@@ -22,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { getStoredGeminiApiKey, saveStoredGeminiApiKey } from "@/lib/geminiKey";
+import { GoogleGenAI } from "@google/genai";
 
 interface AIKeyModalProps {
   trigger?: React.ReactNode;
@@ -35,6 +39,8 @@ export function AIKeyModal({ trigger, open, onOpenChange, onKeySaved }: AIKeyMod
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [testingKey, setTestingKey] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
   const isControlled = typeof open === "boolean";
   const isOpen = isControlled ? open : internalOpen;
@@ -51,11 +57,54 @@ export function AIKeyModal({ trigger, open, onOpenChange, onKeySaved }: AIKeyMod
       const current = getStoredGeminiApiKey();
       setApiKey(current);
       setSavedSuccess(false);
+      setTestResult(null);
     }
   }, [isOpen]);
 
+  const handleTestKey = async () => {
+    const cleanKey = apiKey.trim().replace(/^["'`]|["'`]$/g, "").trim();
+    if (!cleanKey) {
+      setTestResult({ success: false, message: "Please paste your API key first." });
+      return;
+    }
+
+    setTestingKey(true);
+    setTestResult(null);
+
+    try {
+      const ai = new GoogleGenAI({ apiKey: cleanKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: [{ role: "user", parts: [{ text: "Respond with 'OK' if you can read this." }] }],
+      });
+
+      if (response && response.text) {
+        setTestResult({
+          success: true,
+          message: "API Key verified! Connected to Gemini 2.5 Flash successfully.",
+        });
+        // Auto-save the verified key
+        saveStoredGeminiApiKey(cleanKey);
+        onKeySaved?.(true);
+      } else {
+        throw new Error("No response returned from model.");
+      }
+    } catch (err: any) {
+      const msg = String(err?.message || err || "");
+      let friendlyError = "Failed to connect with this key. Please verify your Google AI Studio key.";
+      if (msg.includes("API_KEY_INVALID") || msg.includes("API key not valid") || msg.includes("UNAUTHENTICATED")) {
+        friendlyError = "Invalid API Key. Please copy your key directly from Google AI Studio.";
+      } else if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED")) {
+        friendlyError = "API key is valid, but current rate limit is reached. Please try again in a few seconds.";
+      }
+      setTestResult({ success: false, message: friendlyError });
+    } finally {
+      setTestingKey(false);
+    }
+  };
+
   const handleSave = () => {
-    const trimmed = apiKey.trim();
+    const trimmed = apiKey.trim().replace(/^["'`]|["'`]$/g, "").trim();
     saveStoredGeminiApiKey(trimmed);
     setSavedSuccess(true);
     onKeySaved?.(Boolean(trimmed));
@@ -69,6 +118,7 @@ export function AIKeyModal({ trigger, open, onOpenChange, onKeySaved }: AIKeyMod
     saveStoredGeminiApiKey("");
     setApiKey("");
     setSavedSuccess(true);
+    setTestResult(null);
     onKeySaved?.(false);
     setTimeout(() => {
       setSavedSuccess(false);
@@ -131,7 +181,10 @@ export function AIKeyModal({ trigger, open, onOpenChange, onKeySaved }: AIKeyMod
               <Input
                 type={showKey ? "text" : "password"}
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
+                onChange={(e) => {
+                  setApiKey(e.target.value);
+                  setTestResult(null);
+                }}
                 placeholder="AIzaSy..."
                 className="pr-20 text-xs font-mono"
               />
@@ -146,13 +199,56 @@ export function AIKeyModal({ trigger, open, onOpenChange, onKeySaved }: AIKeyMod
             </div>
           </div>
 
+          <div className="flex items-center justify-between gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleTestKey}
+              disabled={testingKey || !apiKey.trim()}
+              className="text-xs gap-1.5 h-8 cursor-pointer"
+            >
+              {testingKey ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Testing Connection...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  Test Connection
+                </>
+              )}
+            </Button>
+            <span className="text-[11px] text-muted-foreground">
+              Direct verification with Gemini 2.5 Flash
+            </span>
+          </div>
+
+          {testResult && (
+            <div
+              className={`flex items-start gap-2 p-2.5 rounded-lg text-xs animate-in fade-in border ${
+                testResult.success
+                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30"
+                  : "bg-destructive/10 text-destructive border-destructive/30"
+              }`}
+            >
+              {testResult.success ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
+              ) : (
+                <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+              )}
+              <div className="flex-1 font-medium">{testResult.message}</div>
+            </div>
+          )}
+
           <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-2 text-xs text-muted-foreground">
             <div className="flex items-start gap-2 text-foreground font-medium">
               <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-              <span>Direct Browser-to-Cloud Integration</span>
+              <span>Direct Browser & Server Resilience</span>
             </div>
             <p className="text-[11px] leading-relaxed">
-              When saved here in your browser, all AI features (Isko AI Chat, Exam Question Scanning, and Error Explanations) will immediately and directly use your key.
+              When configured here, your API key is stored securely in your browser session and automatically powers all AI features (Chat, Mistake Explanations, PDF Exam Scanning, and Quiz Generation).
             </p>
           </div>
 

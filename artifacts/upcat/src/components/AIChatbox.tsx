@@ -24,7 +24,8 @@ import { SmartText } from "./SmartText";
 import { AICreditsBadge } from "./AICreditsBadge";
 import { AIKeyModal } from "./AIKeyModal";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
-import { getStoredGeminiApiKey, getAIHeaders } from "@/lib/geminiKey";
+import { getStoredGeminiApiKey } from "@/lib/geminiKey";
+import { sendGeminiChatMessage } from "@/lib/geminiClientService";
 
 interface Message {
   id: string;
@@ -130,40 +131,15 @@ export function AIChatbox() {
     setIsLoading(true);
 
     try {
-      // Format history for server call
+      // Format history for chat call
       const history = messages
-        .filter((m) => m.id !== "welcome" && !m.text.startsWith("⏳ **AI Limit Reached"))
+        .filter((m) => m.id !== "welcome" && !m.text.startsWith("⏳ **AI Limit Reached") && !m.isError)
         .map((m) => ({
           role: m.role,
           text: m.text,
         }));
 
-      const storedKey = getStoredGeminiApiKey();
-      const apiPath = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/api/gemini/chat`;
-      const res = await fetch(apiPath, {
-        method: "POST",
-        headers: getAIHeaders(),
-        body: JSON.stringify({
-          message: query,
-          history,
-          apiKey: storedKey || undefined,
-        }),
-      });
-
-      let data: any = {};
-      const responseText = await res.text();
-      try {
-        data = JSON.parse(responseText);
-      } catch {
-        if (responseText.startsWith("<!DOCTYPE") || responseText.includes("<html")) {
-          throw new Error("API endpoint route returned HTML instead of JSON. Ensure the server is running properly.");
-        }
-      }
-
-      if (!res.ok) {
-        const errorDetail = data?.error || (res.status === 429 ? "Rate limit reached. Please wait a few seconds." : `Server returned error (${res.status}).`);
-        throw new Error(errorDetail);
-      }
+      const reply = await sendGeminiChatMessage(query, history);
 
       // Record successful AI quota consumption
       recordAIUsage("chat");
@@ -171,7 +147,7 @@ export function AIChatbox() {
       const botMsg: Message = {
         id: (Date.now() + 1).toString(),
         role: "model",
-        text: data.reply || "Sorry, I couldn't generate an answer.",
+        text: reply || "Sorry, I couldn't generate an answer.",
         timestamp: new Date(),
       };
 

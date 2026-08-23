@@ -7,7 +7,8 @@ import { SmartText } from "@/components/SmartText";
 import { AICreditsBadge } from "@/components/AICreditsBadge";
 import { AIKeyModal } from "@/components/AIKeyModal";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
-import { getStoredGeminiApiKey, getAIHeaders } from "@/lib/geminiKey";
+import { getStoredGeminiApiKey } from "@/lib/geminiKey";
+import { explainQuestionError } from "@/lib/geminiClientService";
 import {
   Sparkles,
   Bot,
@@ -89,36 +90,15 @@ export function AskAIQuestionTutor({ answer, questionNumber }: AskAIQuestionTuto
     setIsLoading(true);
 
     try {
-      const storedKey = getStoredGeminiApiKey();
-      const res = await fetch("/api/gemini/explain-error", {
-        method: "POST",
-        headers: getAIHeaders(),
-        body: JSON.stringify({
-          questionText: answer.questionText,
-          choices: answer.choices,
-          correctAnswer: answer.correctAnswer,
-          userAnswer: answer.selectedAnswer,
-          subject: answer.subject,
-          explanation: answer.explanation,
-          userQuery: textToSend,
-          apiKey: storedKey || undefined,
-        }),
+      const data = await explainQuestionError({
+        questionText: answer.questionText,
+        choices: answer.choices,
+        correctAnswer: answer.correctAnswer,
+        userAnswer: answer.selectedAnswer,
+        subject: answer.subject,
+        explanation: answer.explanation,
+        userQuery: textToSend,
       });
-
-      let data: any = {};
-      const responseText = await res.text();
-      try {
-        data = JSON.parse(responseText);
-      } catch {
-        if (!res.ok) {
-          throw new Error(`The AI service is momentarily busy (Status ${res.status}). Please try again in a few moments.`);
-        }
-        throw new Error("Received an unexpected response format from the server. Please try again.");
-      }
-
-      if (!res.ok || data.error) {
-        throw new Error(data.error || "Failed to get AI explanation.");
-      }
 
       recordAIUsage("error_explain");
 
