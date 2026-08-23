@@ -70,8 +70,73 @@ function normalizeErrorMessage(err: any): { statusCode: number; message: string 
   return { statusCode, message };
 }
 
+async function parseRequestBody(req: any): Promise<any> {
+  if (req.body && typeof req.body === "object") {
+    return req.body;
+  }
+  if (typeof req.body === "string" && req.body.length > 0) {
+    try {
+      return JSON.parse(req.body);
+    } catch {
+      return {};
+    }
+  }
+
+  return new Promise((resolve) => {
+    let body = "";
+    let resolved = false;
+
+    const timeout = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        try {
+          resolve(body ? JSON.parse(body) : {});
+        } catch {
+          resolve({});
+        }
+      }
+    }, 3000);
+
+    req.on("data", (chunk: any) => {
+      body += chunk;
+    });
+
+    req.on("end", () => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        try {
+          resolve(body ? JSON.parse(body) : {});
+        } catch {
+          resolve({});
+        }
+      }
+    });
+
+    req.on("error", () => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        resolve({});
+      }
+    });
+
+    if (req.complete || req.readableEnded) {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timeout);
+        try {
+          resolve(body ? JSON.parse(body) : {});
+        } catch {
+          resolve({});
+        }
+      }
+    }
+  });
+}
+
 export function geminiApiPlugin(): Plugin {
-  const chatHandler = (req: any, res: any) => {
+  const chatHandler = async (req: any, res: any) => {
     if (req.method !== "POST") {
       res.statusCode = 405;
       res.setHeader("Content-Type", "application/json");
@@ -87,32 +152,25 @@ export function geminiApiPlugin(): Plugin {
       return;
     }
 
-    let body = "";
-    req.on("data", (chunk: any) => {
-      body += chunk;
-    });
+    try {
+      const parsed = await parseRequestBody(req);
+      const { message, history } = parsed;
+      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const reply = await handleGeminiChat(message, history, customApiKey);
 
-    req.on("end", async () => {
-      try {
-        const parsed = JSON.parse(body || "{}");
-        const { message, history } = parsed;
-        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
-        const reply = await handleGeminiChat(message, history, customApiKey);
-
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ reply }));
-      } catch (err: any) {
-        console.error("Gemini API Error:", err);
-        const { statusCode, message } = normalizeErrorMessage(err);
-        res.statusCode = statusCode;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ error: message }));
-      }
-    });
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ reply }));
+    } catch (err: any) {
+      console.error("Gemini API Error:", err);
+      const { statusCode, message } = normalizeErrorMessage(err);
+      res.statusCode = statusCode;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: message }));
+    }
   };
 
-  const mistakeQuizHandler = (req: any, res: any) => {
+  const mistakeQuizHandler = async (req: any, res: any) => {
     if (req.method !== "POST") {
       res.statusCode = 405;
       res.setHeader("Content-Type", "application/json");
@@ -128,32 +186,25 @@ export function geminiApiPlugin(): Plugin {
       return;
     }
 
-    let body = "";
-    req.on("data", (chunk: any) => {
-      body += chunk;
-    });
+    try {
+      const parsed = await parseRequestBody(req);
+      const { mistakes = [], count = 5 } = parsed;
+      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count, customApiKey);
 
-    req.on("end", async () => {
-      try {
-        const parsed = JSON.parse(body || "{}");
-        const { mistakes = [], count = 5 } = parsed;
-        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
-        const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count, customApiKey);
-
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ questions }));
-      } catch (err: any) {
-        console.error("Gemini Mistake Quiz API Error:", err);
-        const { statusCode, message } = normalizeErrorMessage(err);
-        res.statusCode = statusCode;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ error: message }));
-      }
-    });
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ questions }));
+    } catch (err: any) {
+      console.error("Gemini Mistake Quiz API Error:", err);
+      const { statusCode, message } = normalizeErrorMessage(err);
+      res.statusCode = statusCode;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: message }));
+    }
   };
 
-  const extractPdfHandler = (req: any, res: any) => {
+  const extractPdfHandler = async (req: any, res: any) => {
     if (req.method !== "POST") {
       res.statusCode = 405;
       res.setHeader("Content-Type", "application/json");
@@ -169,30 +220,23 @@ export function geminiApiPlugin(): Plugin {
       return;
     }
 
-    let body = "";
-    req.on("data", (chunk: any) => {
-      body += chunk;
-    });
-
-    req.on("end", async () => {
-      try {
-        const parsed = JSON.parse(body || "{}");
-        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
-        const questions = await handleExtractQuestionsFromPdfOrText(parsed, customApiKey);
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ questions, count: questions.length }));
-      } catch (err: any) {
-        console.error("Gemini Extract PDF Error:", err);
-        const { statusCode, message } = normalizeErrorMessage(err);
-        res.statusCode = statusCode;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ error: message }));
-      }
-    });
+    try {
+      const parsed = await parseRequestBody(req);
+      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const questions = await handleExtractQuestionsFromPdfOrText(parsed, customApiKey);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ questions, count: questions.length }));
+    } catch (err: any) {
+      console.error("Gemini Extract PDF Error:", err);
+      const { statusCode, message } = normalizeErrorMessage(err);
+      res.statusCode = statusCode;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: message }));
+    }
   };
 
-  const generateSubjectHandler = (req: any, res: any) => {
+  const generateSubjectHandler = async (req: any, res: any) => {
     if (req.method !== "POST") {
       res.statusCode = 405;
       res.setHeader("Content-Type", "application/json");
@@ -208,30 +252,23 @@ export function geminiApiPlugin(): Plugin {
       return;
     }
 
-    let body = "";
-    req.on("data", (chunk: any) => {
-      body += chunk;
-    });
-
-    req.on("end", async () => {
-      try {
-        const parsed = JSON.parse(body || "{}");
-        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
-        const questions = await handleGenerateSubjectQuestions(parsed, customApiKey);
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ questions, count: questions.length }));
-      } catch (err: any) {
-        console.error("Gemini Generate Subject Questions Error:", err);
-        const { statusCode, message } = normalizeErrorMessage(err);
-        res.statusCode = statusCode;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ error: message }));
-      }
-    });
+    try {
+      const parsed = await parseRequestBody(req);
+      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const questions = await handleGenerateSubjectQuestions(parsed, customApiKey);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ questions, count: questions.length }));
+    } catch (err: any) {
+      console.error("Gemini Generate Subject Questions Error:", err);
+      const { statusCode, message } = normalizeErrorMessage(err);
+      res.statusCode = statusCode;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: message }));
+    }
   };
 
-  const explainErrorHandler = (req: any, res: any) => {
+  const explainErrorHandler = async (req: any, res: any) => {
     if (req.method !== "POST") {
       res.statusCode = 405;
       res.setHeader("Content-Type", "application/json");
@@ -247,27 +284,20 @@ export function geminiApiPlugin(): Plugin {
       return;
     }
 
-    let body = "";
-    req.on("data", (chunk: any) => {
-      body += chunk;
-    });
-
-    req.on("end", async () => {
-      try {
-        const parsed = JSON.parse(body || "{}");
-        const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
-        const result = await handleExplainQuestionError(parsed, customApiKey);
-        res.statusCode = 200;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify(result));
-      } catch (err: any) {
-        console.error("Gemini Explain Error:", err);
-        const { statusCode, message } = normalizeErrorMessage(err);
-        res.statusCode = statusCode;
-        res.setHeader("Content-Type", "application/json");
-        res.end(JSON.stringify({ error: message }));
-      }
-    });
+    try {
+      const parsed = await parseRequestBody(req);
+      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const result = await handleExplainQuestionError(parsed, customApiKey);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify(result));
+    } catch (err: any) {
+      console.error("Gemini Explain Error:", err);
+      const { statusCode, message } = normalizeErrorMessage(err);
+      res.statusCode = statusCode;
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ error: message }));
+    }
   };
 
   const routeRequest = (req: any, res: any, next: any) => {
