@@ -228,6 +228,12 @@ function normalizeExtractedQuestion(q: any, idx: number, explicitSubjectHint?: s
  * Executes a generateContent call with exponential backoff retry and model fallback
  * specifically for transient 503 (high demand) and 429 (rate limit) errors.
  */
+function cleanApiKey(key?: any): string | undefined {
+  if (!key || typeof key !== "string") return undefined;
+  const cleaned = key.trim().replace(/^["'`]|["'`]$/g, "").trim();
+  return cleaned.length > 0 ? cleaned : undefined;
+}
+
 async function generateWithRetry(
   ai: GoogleGenAI,
   params: any,
@@ -253,7 +259,7 @@ async function generateWithRetry(
         });
       } catch (err: any) {
         lastError = err;
-        const errMsg = String(err?.message || "");
+        const errMsg = String(err?.message || err || "");
         const is503 =
           err?.status === 503 ||
           errMsg.includes("503") ||
@@ -264,6 +270,17 @@ async function generateWithRetry(
           err?.status === 429 ||
           errMsg.includes("429") ||
           errMsg.includes("RESOURCE_EXHAUSTED");
+        const isAuthError =
+          errMsg.includes("API_KEY_INVALID") ||
+          errMsg.includes("API key not valid") ||
+          errMsg.includes("API key is required") ||
+          errMsg.includes("GEMINI_API_KEY is not set") ||
+          errMsg.includes("UNAUTHENTICATED");
+
+        if (isAuthError) {
+          // If auth/key fails, switching models won't help; throw immediately
+          throw err;
+        }
 
         if ((is503 || is429) && attempt < maxRetries) {
           const delayMs = (attempt + 1) * 1200;
@@ -272,13 +289,9 @@ async function generateWithRetry(
           continue;
         }
 
-        if (is503 || is429 || errMsg.includes("404") || errMsg.includes("not found")) {
-          console.warn(`[Gemini Handler] Model ${model} failed (${errMsg}). Trying next fallback candidate model...`);
-          break; // break inner attempt loop, advance to next fallback model
-        }
-
-        // If it's a fatal validation/bad request error, throw immediately
-        throw err;
+        // For model errors (404 model not found, unsupported in region, 503/429 max retries reached), try next fallback model
+        console.warn(`[Gemini Handler] Model ${model} failed (${errMsg.slice(0, 100)}). Trying next candidate model...`);
+        break; // break inner attempt loop, advance to next fallback model
       }
     }
   }
@@ -287,16 +300,15 @@ async function generateWithRetry(
 }
 
 function getGeminiClient(customApiKey?: string): GoogleGenAI {
-  const rawKey =
-    customApiKey ||
-    process.env.GEMINI_API_KEY ||
-    process.env.VITE_GEMINI_API_KEY ||
-    process.env.GOOGLE_API_KEY ||
-    process.env.API_KEY ||
-    process.env.GEMINI_KEY ||
-    process.env.GOOGLE_GENAI_API_KEY;
-
-  const apiKey = typeof rawKey === "string" ? rawKey.trim() : undefined;
+  const apiKey =
+    cleanApiKey(customApiKey) ||
+    cleanApiKey(process.env.GEMINI_API_KEY) ||
+    cleanApiKey(process.env.VITE_GEMINI_API_KEY) ||
+    cleanApiKey(process.env.GOOGLE_API_KEY) ||
+    cleanApiKey(process.env.API_KEY) ||
+    cleanApiKey(process.env.GEMINI_KEY) ||
+    cleanApiKey(process.env.GOOGLE_GENAI_API_KEY) ||
+    cleanApiKey(process.env.GOOGLE_AI_KEY);
 
   if (apiKey) {
     return new GoogleGenAI({
@@ -352,7 +364,7 @@ Core Guidelines:
   });
 
   const response = await generateWithRetry(ai, {
-    model: "gemini-3.7-flash",
+    model: "gemini-2.5-flash",
     contents: formattedContents,
     config: {
       systemInstruction,
@@ -401,7 +413,7 @@ Output MUST be a valid JSON array matching this format:
 ]`;
 
   const response = await generateWithRetry(ai, {
-    model: "gemini-3.7-flash",
+    model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       temperature: 0.3,
@@ -551,7 +563,7 @@ Return ONLY a valid JSON array of question objects:
 ]`;
 
   const response = await generateWithRetry(ai, {
-    model: "gemini-3.7-flash",
+    model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: promptText }] }],
     config: {
       temperature: 0.1,
@@ -724,7 +736,7 @@ JSON array of question objects:
   parts.push({ text: promptText });
 
   const response = await generateWithRetry(ai, {
-    model: "gemini-3.7-flash",
+    model: "gemini-2.5-flash",
     contents: [{ role: "user", parts }],
     config: {
       temperature: 0.1,
@@ -784,7 +796,7 @@ Requirements:
 ]`;
 
   const response = await generateWithRetry(ai, {
-    model: "gemini-3.7-flash",
+    model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       temperature: 0.4,
@@ -855,7 +867,7 @@ Format as a clean JSON object:
 }`;
 
   const response = await generateWithRetry(ai, {
-    model: "gemini-3.7-flash",
+    model: "gemini-2.5-flash",
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config: {
       temperature: 0.3,

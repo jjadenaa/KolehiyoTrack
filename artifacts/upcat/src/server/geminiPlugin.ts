@@ -42,6 +42,16 @@ function normalizeErrorMessage(err: any): { statusCode: number; message: string 
   } else if (err?.status === 503 || rawMsg.includes("503") || rawMsg.includes("UNAVAILABLE") || rawMsg.includes("high demand") || rawMsg.includes("overloaded")) {
     statusCode = 503;
     message = "The AI service is currently experiencing high demand. Please try again in a few moments.";
+  } else if (
+    rawMsg.includes("API_KEY_INVALID") ||
+    rawMsg.includes("API key not valid") ||
+    rawMsg.includes("API key is required") ||
+    rawMsg.includes("GEMINI_API_KEY is not set") ||
+    rawMsg.includes("GEMINI_API_KEY is missing") ||
+    rawMsg.includes("UNAUTHENTICATED")
+  ) {
+    statusCode = 401;
+    message = "Gemini API key is missing or invalid. Please configure GEMINI_API_KEY in your environment variables or provide a valid Google AI Studio key.";
   } else if (rawMsg) {
     try {
       // Handles ApiError: {"error":{"code":503,"message":...}}
@@ -50,7 +60,10 @@ function normalizeErrorMessage(err: any): { statusCode: number; message: string 
         const parsed = JSON.parse(rawMsg.slice(jsonStart));
         if (parsed?.error?.message) {
           message = parsed.error.message;
-          if (parsed.error.code === 503 || parsed.error.status === "UNAVAILABLE") {
+          if (parsed.error.code === 401 || parsed.error.status === "UNAUTHENTICATED") {
+            statusCode = 401;
+            message = "Gemini API key is invalid or unauthorized. Please verify your API key.";
+          } else if (parsed.error.code === 503 || parsed.error.status === "UNAVAILABLE") {
             statusCode = 503;
             message = "The AI model is currently experiencing high demand. Please try again in a few moments.";
           } else if (parsed.error.code === 429 || parsed.error.status === "RESOURCE_EXHAUSTED") {
@@ -69,6 +82,23 @@ function normalizeErrorMessage(err: any): { statusCode: number; message: string 
   }
 
   return { statusCode, message };
+}
+
+function extractApiKeyFromRequest(req: any, parsedBody?: any): string | undefined {
+  const headerKey =
+    req.headers?.["x-gemini-api-key"] ||
+    req.headers?.["x-api-key"] ||
+    req.headers?.["gemini-api-key"] ||
+    (typeof req.headers?.authorization === "string" && req.headers.authorization.startsWith("Bearer ")
+      ? req.headers.authorization.slice(7)
+      : undefined);
+
+  const rawKey = headerKey || parsedBody?.apiKey;
+  if (typeof rawKey === "string") {
+    const cleaned = rawKey.trim().replace(/^["'`]|["'`]$/g, "").trim();
+    return cleaned.length > 0 ? cleaned : undefined;
+  }
+  return undefined;
 }
 
 function readBody(req: any): Promise<any> {
@@ -118,7 +148,7 @@ export function geminiApiPlugin(): Plugin {
     try {
       const parsed = await readBody(req);
       const { message, history } = parsed;
-      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const customApiKey = extractApiKeyFromRequest(req, parsed);
       const reply = await handleGeminiChat(message, history, customApiKey);
 
       res.statusCode = 200;
@@ -152,7 +182,7 @@ export function geminiApiPlugin(): Plugin {
     try {
       const parsed = await readBody(req);
       const { mistakes = [], count = 5 } = parsed;
-      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const customApiKey = extractApiKeyFromRequest(req, parsed);
       const questions = await handleGenerateMistakeFollowUpQuiz(mistakes, count, customApiKey);
 
       res.statusCode = 200;
@@ -185,7 +215,7 @@ export function geminiApiPlugin(): Plugin {
 
     try {
       const parsed = await readBody(req);
-      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const customApiKey = extractApiKeyFromRequest(req, parsed);
       const questions = await handleExtractQuestionsFromPdfOrText(parsed, customApiKey);
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
@@ -217,7 +247,7 @@ export function geminiApiPlugin(): Plugin {
 
     try {
       const parsed = await readBody(req);
-      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const customApiKey = extractApiKeyFromRequest(req, parsed);
       const questions = await handleGenerateSubjectQuestions(parsed, customApiKey);
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
@@ -249,7 +279,7 @@ export function geminiApiPlugin(): Plugin {
 
     try {
       const parsed = await readBody(req);
-      const customApiKey = (req.headers["x-gemini-api-key"] as string) || parsed.apiKey;
+      const customApiKey = extractApiKeyFromRequest(req, parsed);
       const result = await handleExplainQuestionError(parsed, customApiKey);
       res.statusCode = 200;
       res.setHeader("Content-Type", "application/json");
