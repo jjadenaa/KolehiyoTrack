@@ -15,7 +15,20 @@ export default async function handler(req: any, res: any) {
     if (typeof body === "string") {
       try { body = JSON.parse(body); } catch {}
     }
-    const questions = await handleGenerateSubjectQuestions(body || {});
+    const apiKey =
+      (req.headers && (req.headers["x-gemini-api-key"] || req.headers["x-api-key"])) ||
+      body?.apiKey ||
+      process.env.GEMINI_API_KEY ||
+      process.env.VITE_GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.API_KEY ||
+      process.env.GEMINI_KEY ||
+      process.env.GOOGLE_GENAI_API_KEY;
+
+    const questions = await handleGenerateSubjectQuestions(
+      body || {},
+      typeof apiKey === "string" && apiKey.trim() ? apiKey.trim() : undefined
+    );
     return res.status(200).json({ questions, count: questions.length });
   } catch (err: any) {
     console.error("Vercel Generate Subject Questions Error:", err);

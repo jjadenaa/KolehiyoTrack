@@ -1,5 +1,4 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import * as pdfParseModule from "pdf-parse";
 
 const VALID_SUBJECT_IDS = [
   "math",
@@ -234,11 +233,13 @@ async function generateWithRetry(
   params: any,
   maxRetries = 2
 ): Promise<any> {
-  const primaryModel = params.model || "gemini-3.7-flash";
+  const primaryModel = params.model || "gemini-2.5-flash";
   const modelCandidates = [
     primaryModel,
-    "gemini-3.7-flash",
     "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-3.7-flash",
   ].filter((m, i, arr) => arr.indexOf(m) === i); // unique
 
   let lastError: any = null;
@@ -286,12 +287,16 @@ async function generateWithRetry(
 }
 
 function getGeminiClient(customApiKey?: string): GoogleGenAI {
-  const apiKey =
+  const rawKey =
     customApiKey ||
     process.env.GEMINI_API_KEY ||
     process.env.VITE_GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
-    process.env.API_KEY;
+    process.env.API_KEY ||
+    process.env.GEMINI_KEY ||
+    process.env.GOOGLE_GENAI_API_KEY;
+
+  const apiKey = typeof rawKey === "string" ? rawKey.trim() : undefined;
 
   if (apiKey) {
     return new GoogleGenAI({
@@ -617,8 +622,9 @@ export async function handleExtractQuestionsFromPdfOrText(params: {
 
   if (isPdf && params.fileBase64) {
     try {
+      const pdfParseModule = await import("pdf-parse").catch(() => null);
       const buffer = Buffer.from(params.fileBase64, "base64");
-      const PDFParseClass = (pdfParseModule as any).PDFParse || (pdfParseModule as any).default;
+      const PDFParseClass = (pdfParseModule as any)?.PDFParse || (pdfParseModule as any)?.default;
       let pdfText = "";
 
       if (PDFParseClass) {

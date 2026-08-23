@@ -4,10 +4,9 @@
  * In local dev (when running separately), API might be at localhost:8080.
  */
 export function getApiUrl(): string {
-  // In Replit, the API server is proxied at the same origin
-  if (typeof window !== "undefined" && window.location.host.includes("replit")) {
+  if (typeof window !== "undefined") {
+    // In production on Vercel, Replit, Cloud Run, custom domain, etc.
     return `${window.location.origin}/api`;
   }
-  // Fallback for dev
-  return import.meta.env.VITE_API_URL || "http://localhost:8080/api";
+  return import.meta.env.VITE_API_URL || "/api";
 }
