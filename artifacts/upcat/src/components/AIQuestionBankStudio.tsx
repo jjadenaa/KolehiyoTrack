@@ -9,8 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { addBankQuestions, deleteBankQuestion, BankQuestion } from "@/lib/questionBank";
 import { SUBJECT_LABELS, getAvailableSubjectsForUniversity, getDefaultItemCounts } from "@/lib/format";
 import { SmartText } from "@/components/SmartText";
-import { AICreditsBadge } from "@/components/AICreditsBadge";
-import { AIKeyModal } from "@/components/AIKeyModal";
+import { AILimitCounter } from "@/components/AILimitCounter";
 import { checkCanUseAI, recordAIUsage } from "@/lib/aiQuota";
 import { getStoredGeminiApiKey, getAIHeaders } from "@/lib/geminiKey";
 import { extractTextFromPdfFile } from "@/lib/pdfExtractor";
@@ -712,8 +711,7 @@ export function AIQuestionBankStudio({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <AICreditsBadge compact />
-          <AIKeyModal />
+          <AILimitCounter compact />
           {onClose && (
             <Button
               variant="ghost"

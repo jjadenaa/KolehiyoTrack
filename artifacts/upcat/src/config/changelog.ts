@@ -9,10 +9,20 @@ export interface ChangelogItem {
 }
 
 // 1. Change your global version number here
-export const CURRENT_VERSION = "v0.3.0 Beta";
+export const CURRENT_VERSION = "v0.3.2 Beta";
 
 // 2. Add or update release notes here (newest first)
 export const CHANGELOG_DATA: ChangelogItem[] = [
+    {
+    version: "v0.3.2",
+    date: "September 5, 2026",
+    changes: [
+      {
+        title: "Added ability to add own API key and bug fixes",
+        description: "Fixed AI coudn't generate by letting user upload their own API key"
+      }
+    ]
+  },
    {
     version: "v0.3.1",
     date: "August 21, 2026",

@@ -319,6 +319,14 @@ export default function TestPage() {
                   };
                   answersRef.current = next;
                   setAnswers(next);
+
+                  // Auto advance question only if explicitly enabled in Settings (disabled by default)
+                  const isAutoAdvance = typeof window !== "undefined" && localStorage.getItem("kt-auto-advance") === "true";
+                  if (isAutoAdvance && currentPage < pages.length - 1) {
+                    setTimeout(() => {
+                      setCurrentPage((p) => Math.min(pages.length - 1, p + 1));
+                    }, 300);
+                  }
                 }}
               >
                 <span className="mr-3 font-bold shrink-0 mt-[2px]">{String.fromCharCode(65 + i)}.</span>

@@ -23,11 +23,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { LogIn, LogOut, Sun, Moon, Menu, Plus, Home, Book, X, History, MessageSquare, BrainCircuit, Sparkles } from "lucide-react";
+import { LogIn, LogOut, Sun, Moon, Menu, Plus, Home, Book, X, History, BrainCircuit, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CURRENT_VERSION, CHANGELOG_DATA } from "../config/changelog";
 import { getLocalMistakes } from "@/lib/mistakeDiary";
-import { AICreditsBadge } from "@/components/AICreditsBadge";
+import { AIAutoSwitchNotification } from "@/components/AILimitCounter";
+import { AIOnboardingModal } from "@/components/AIOnboardingModal";
+import { SettingsModal } from "@/components/SettingsModal";
 import { UniversityLogo } from "@/components/UniversityLogo";
 
 const UNIVERSITIES = [
@@ -42,6 +44,8 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
   const { theme, toggleTheme } = useTheme();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [changelogOpen, setChangelogOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"general" | "ai" | "feedback" | "about">("general");
   const [location] = useLocation();
 
   const [addedUniIds, setAddedUniIds] = useState<string[]>(() => getLocalAddedUniversities());
@@ -208,7 +212,6 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
 
             {/* Sidebar Footer with Changelog and Version */}
             <div className="p-4 border-t bg-card/50 flex flex-col gap-2.5 mt-auto shrink-0">
-              <AICreditsBadge />
               <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/85 px-1 block pt-1">
                 Visit our social media pages
               </span>
@@ -305,52 +308,27 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                 <Menu className="h-5 w-5" />
               </Button>
             )}
-            <div className="ml-auto flex items-center space-x-3">
-              <AICreditsBadge compact className="hidden md:inline-flex" />
+            <div className="ml-auto flex items-center space-x-2 sm:space-x-3">
+              {/* Settings Button beside Profile / Auth */}
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-9 w-9 rounded-full sm:hidden"
-                asChild
-                title="Submit Feedback"
+                onClick={() => {
+                  setSettingsTab("general");
+                  setSettingsOpen(true);
+                }}
+                aria-label="Open Settings"
+                title="Settings & Preferences (Appearance, AI Engines, Feedback)"
+                className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
               >
-                <a 
-                  href="https://docs.google.com/forms/d/e/1FAIpQLSeoetYxHNgRQxyJX0k4H5UpI0B3NXE6YHbNgk6fhOP3jH23wg/viewform?usp=header"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <MessageSquare className="h-4 w-4 text-primary" />
-                </a>
+                <Settings className="h-4 w-4" />
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden sm:flex items-center gap-2 h-9 px-4 rounded-full text-xs font-semibold shadow-sm hover:bg-muted/50"
-                asChild
-              >
-                <a 
-                  href="https://docs.google.com/forms/d/e/1FAIpQLSeoetYxHNgRQxyJX0k4H5UpI0B3NXE6YHbNgk6fhOP3jH23wg/viewform?usp=header"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <MessageSquare className="h-3.5 w-3.5 text-primary" />
-                  Feedback / Report Bug
-                </a>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleTheme}
-                aria-label="Toggle dark mode"
-                className="h-9 w-9 rounded-full"
-              >
-                {theme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-              </Button>
+
               {!loading && (
                 user ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                      <button className="flex items-center gap-2 rounded-full focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 cursor-pointer">
                         <Avatar className="h-8 w-8">
                           <AvatarImage src={user.photoURL ?? undefined} alt={user.displayName ?? "User"} />
                           <AvatarFallback className="text-xs">
@@ -362,7 +340,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                         </span>
                       </button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuContent align="end" className="w-52">
                       <DropdownMenuLabel className="font-normal">
                         <p className="text-sm font-medium leading-none truncate">{user.displayName}</p>
                         <p className="text-xs text-muted-foreground mt-1 truncate">{user.email}</p>
@@ -402,6 +380,13 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
             {children}
           </div>
         </main>
+        <SettingsModal
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          defaultTab={settingsTab}
+        />
+        <AIOnboardingModal />
+        <AIAutoSwitchNotification />
       </div>
     </div>
   );

@@ -4,8 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { SmartText } from "@/components/SmartText";
-import { AICreditsBadge } from "@/components/AICreditsBadge";
-import { AIKeyModal } from "@/components/AIKeyModal";
+import { AILimitCounter } from "@/components/AILimitCounter";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
 import { getStoredGeminiApiKey } from "@/lib/geminiKey";
 import { explainQuestionError } from "@/lib/geminiClientService";
@@ -171,8 +170,7 @@ export function AskAIQuestionTutor({ answer, questionNumber }: AskAIQuestionTuto
             </div>
 
             <div className="flex items-center gap-2">
-              <AICreditsBadge compact />
-              <AIKeyModal />
+              <AILimitCounter compact />
               <Button
                 variant="ghost"
                 size="sm"

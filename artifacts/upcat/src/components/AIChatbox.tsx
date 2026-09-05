@@ -21,8 +21,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card";
 import { SmartText } from "./SmartText";
-import { AICreditsBadge } from "./AICreditsBadge";
-import { AIKeyModal } from "./AIKeyModal";
+import { AILimitCounter } from "./AILimitCounter";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
 import { getStoredGeminiApiKey } from "@/lib/geminiKey";
 import { sendGeminiChatMessage } from "@/lib/geminiClientService";
@@ -47,11 +46,12 @@ const QUICK_PROMPTS = [
 ];
 
 export function AIChatbox() {
+  const quota = useAIQuota();
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       role: "model",
-      text: "Kumusta, Iskolar! 👋 I'm **Isko AI**, your Gemini-powered CET Study & Admissions Assistant.\n\nAsk me anything about **Math, Science, Language Proficiency, Reading Comprehension**, or **University Application Strategies**!",
+      text: "Kumusta, Iskolar! 👋 I'm **Isko AI**, your CET Study & Admissions Assistant.\n\nAsk me anything about **Math, Science, Language Proficiency, Reading Comprehension**, or **University Application Strategies**!",
       timestamp: new Date(),
     },
   ]);
@@ -207,14 +207,9 @@ export function AIChatbox() {
             <Sparkles className="h-5 w-5 animate-pulse text-primary" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
-              <CardTitle className="text-base font-extrabold tracking-tight flex items-center gap-1.5">
-                Isko AI Assistant
-              </CardTitle>
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 flex items-center gap-1">
-                <Zap className="h-3 w-3" /> Gemini 3.6 Flash
-              </span>
-            </div>
+            <CardTitle className="text-base font-extrabold tracking-tight">
+              Isko AI Assistant
+            </CardTitle>
             <CardDescription className="text-xs font-medium line-clamp-1">
               Your 24/7 AI tutor for UPCAT, ACET, DCAT, USTET & CET preparation
             </CardDescription>
@@ -222,10 +217,7 @@ export function AIChatbox() {
         </div>
 
         <div className="flex items-center gap-2">
-          <AICreditsBadge compact className="hidden sm:inline-flex" />
-          <div onClick={(e) => e.stopPropagation()}>
-            <AIKeyModal />
-          </div>
+          <AILimitCounter compact className="inline-flex" />
           {messages.length > 1 && (
             <Button
               variant="ghost"
@@ -412,6 +404,17 @@ export function AIChatbox() {
                 <span className="hidden sm:inline">Ask</span>
               </Button>
             </form>
+
+            <div className="flex items-center text-[11px] text-muted-foreground px-1 pt-1">
+              <div className="flex items-center gap-1.5 truncate">
+                <Zap className="h-3 w-3 text-amber-500 shrink-0" />
+                <span className="truncate">
+                  {quota.hasCustomKey 
+                    ? `${quota.providerName} Unlimited Active` 
+                    : `${quota.remaining} of ${quota.total} AI queries left today (resets in ${quota.resetTimeStr})`}
+                </span>
+              </div>
+            </div>
           </CardContent>
         </div>
       </div>

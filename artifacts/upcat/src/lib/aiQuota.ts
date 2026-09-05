@@ -1,4 +1,12 @@
 import { useState, useEffect } from "react";
+import { 
+  hasAnyCustomApiKey, 
+  getActiveApiKeyInfo, 
+  isAutoSwitchAIEnabled,
+  getAIProviderCandidates,
+  AIProvider,
+  AI_PROVIDERS
+} from "./geminiKey";
 
 export const DAILY_AI_CREDITS_LIMIT = 50;
 export const MIN_COOLDOWN_MS = 2500; // 2.5s minimum gap between rapid clicks
@@ -47,9 +55,11 @@ export function getStoredQuota(): AIQuotaState {
 }
 
 export function getAIQuotaStatus() {
+  const hasCustomKey = hasAnyCustomApiKey();
+  const info = getActiveApiKeyInfo();
   const quota = getStoredQuota();
-  const remaining = Math.max(0, DAILY_AI_CREDITS_LIMIT - quota.usedCount);
-  const percentage = Math.min(100, Math.round((quota.usedCount / DAILY_AI_CREDITS_LIMIT) * 100));
+  const remaining = hasCustomKey ? 999 : Math.max(0, DAILY_AI_CREDITS_LIMIT - quota.usedCount);
+  const percentage = hasCustomKey ? 0 : Math.min(100, Math.round((quota.usedCount / DAILY_AI_CREDITS_LIMIT) * 100));
 
   // Time until midnight reset
   const now = new Date();
@@ -62,35 +72,43 @@ export function getAIQuotaStatus() {
 
   return {
     used: quota.usedCount,
-    total: DAILY_AI_CREDITS_LIMIT,
+    total: hasCustomKey ? "∞" : DAILY_AI_CREDITS_LIMIT,
     remaining,
     percentage,
     resetTimeStr,
-    isExhausted: remaining <= 0,
-    isLow: remaining > 0 && remaining <= 5,
+    isExhausted: hasCustomKey ? false : remaining <= 0,
+    isLow: hasCustomKey ? false : (remaining > 0 && remaining <= 5),
+    hasCustomKey,
+    providerName: info.meta.name,
+    providerId: info.provider,
+    featureBreakdown: quota.featureBreakdown || {},
+    autoSwitchEnabled: isAutoSwitchAIEnabled(),
+    candidates: getAIProviderCandidates(info.provider),
   };
 }
 
 export function checkCanUseAI(): { allowed: boolean; reason?: string; cooldownMs?: number } {
+  const hasCustomKey = hasAnyCustomApiKey();
   const quota = getStoredQuota();
   const now = Date.now();
 
-  // 1. Daily Limit Check
-  if (quota.usedCount >= DAILY_AI_CREDITS_LIMIT) {
+  // 1. Daily Limit Check (exempt if user provided their own API key for any choice)
+  if (!hasCustomKey && quota.usedCount >= DAILY_AI_CREDITS_LIMIT) {
     return {
       allowed: false,
-      reason: `You have reached the daily AI limit of ${DAILY_AI_CREDITS_LIMIT} queries. Your quota will reset at midnight!`,
+      reason: `Daily free AI limit of ${DAILY_AI_CREDITS_LIMIT} queries reached! Select an AI choice (Google Gemini, Groq, OpenAI, OpenRouter, DeepSeek) and enter your key to continue with unlimited queries immediately.`,
     };
   }
 
   // 2. Cooldown Check (anti-spam)
+  const cooldownLimit = hasCustomKey ? 500 : MIN_COOLDOWN_MS;
   const timeSinceLast = now - (quota.lastRequestTimestamp || 0);
-  if (timeSinceLast < MIN_COOLDOWN_MS) {
-    const waitSeconds = Math.ceil((MIN_COOLDOWN_MS - timeSinceLast) / 1000);
+  if (timeSinceLast < cooldownLimit) {
+    const waitSeconds = Math.ceil((cooldownLimit - timeSinceLast) / 1000);
     return {
       allowed: false,
       reason: `Please wait ${waitSeconds}s before making another AI request.`,
-      cooldownMs: MIN_COOLDOWN_MS - timeSinceLast,
+      cooldownMs: cooldownLimit - timeSinceLast,
     };
   }
 
@@ -121,9 +139,11 @@ export function useAIQuota() {
 
     window.addEventListener("kolehiyotrack_ai_quota_updated", handleUpdate);
     window.addEventListener("storage", handleUpdate);
+    window.addEventListener("sulyap_ai_key_changed", handleUpdate);
     return () => {
       window.removeEventListener("kolehiyotrack_ai_quota_updated", handleUpdate);
       window.removeEventListener("storage", handleUpdate);
+      window.removeEventListener("sulyap_ai_key_changed", handleUpdate);
     };
   }, []);
 
