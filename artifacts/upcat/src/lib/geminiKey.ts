@@ -35,15 +35,15 @@ export const AI_PROVIDERS: Record<AIProvider, AIProviderMeta> = {
   },
   groq: {
     id: "groq",
-    name: "Groq (Llama 3.3)",
+    name: "Groq",
     tagline: "Ultra-Fast LPU Inference (Free Tier)",
     badge: "Free & Ultra-Fast",
     freeTier: true,
     getKeyUrl: "https://console.groq.com/keys",
     getKeyLabel: "Get Free Key at Groq Console",
     placeholder: "gsk_...",
-    defaultModel: "llama-3.3-70b-versatile",
-    description: "Blazing fast inference speed running Meta Llama 3.3 70B Versatile on custom Groq hardware. Free tier available.",
+    defaultModel: "llama-3.1-8b-instant",
+    description: "Blazing fast inference speed running Meta Llama 3.1 8B Instant and open models on Groq LPUs. Free tier available at console.groq.com.",
     endpoint: "https://api.groq.com/openai/v1/chat/completions",
   },
   openai: {
@@ -96,6 +96,38 @@ const GEMINI_STORAGE_KEYS = [
 ];
 
 const ACTIVE_PROVIDER_STORAGE_KEY = "sulyap_active_ai_provider";
+const GROQ_MODEL_STORAGE_KEY = "sulyap_groq_model";
+
+export const GROQ_CANDIDATE_MODELS: string[] = [
+  "llama-3.1-8b-instant",
+  "openai/gpt-oss-120b",
+  "openai/gpt-oss-20b",
+  "qwen/qwen3.6-27b",
+  "llama-3.3-70b-versatile",
+  "llama3-70b-8192",
+  "llama-3-8b-8192",
+  "mixtral-8x7b-32768",
+];
+
+export function getStoredGroqModel(): string {
+  if (typeof window === "undefined") return "llama-3.1-8b-instant";
+  try {
+    const saved = localStorage.getItem(GROQ_MODEL_STORAGE_KEY);
+    if (saved && saved.trim()) return saved.trim();
+  } catch {}
+  return "llama-3.1-8b-instant";
+}
+
+export function saveStoredGroqModel(model: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (model && model.trim()) {
+      localStorage.setItem(GROQ_MODEL_STORAGE_KEY, model.trim());
+    } else {
+      localStorage.removeItem(GROQ_MODEL_STORAGE_KEY);
+    }
+  } catch {}
+}
 
 export function getActiveAIProvider(): AIProvider {
   if (typeof window === "undefined") return "gemini";

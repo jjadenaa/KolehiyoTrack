@@ -14,8 +14,13 @@ import {
   XCircle,
   Zap,
   Layers,
-  BookOpen
+  BookOpen,
+  Cloud,
+  HardDrive,
+  LogIn
 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+import { saveUserAISettingsToAccount } from "@/lib/userAISettings";
 import { APIKeyTutorialModal } from "@/components/APIKeyTutorialModal";
 import {
   Dialog,
@@ -37,7 +42,8 @@ import {
   getStoredApiKeyForProvider, 
   saveStoredApiKeyForProvider,
   hasAnyCustomApiKey,
-  getActiveApiKeyInfo
+  getActiveApiKeyInfo,
+  getStoredGroqModel
 } from "@/lib/geminiKey";
 import { testAIProviderConnection } from "@/lib/geminiClientService";
 
@@ -60,6 +66,7 @@ export function AIKeyModal({
   initialProvider,
   highlightLimitReached = false
 }: AIKeyModalProps) {
+  const { user, signInWithGoogle } = useAuth();
   const [internalOpen, setInternalOpen] = useState(false);
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>(initialProvider || getActiveAIProvider());
@@ -118,6 +125,12 @@ export function AIKeyModal({
         // Auto-save and activate provider on successful test
         saveStoredApiKeyForProvider(selectedProvider, cleanKey);
         setActiveAIProvider(selectedProvider);
+        if (user) {
+          await saveUserAISettingsToAccount(user, {
+            activeProvider: selectedProvider,
+            providerKey: { provider: selectedProvider, key: cleanKey },
+          });
+        }
         onKeySaved?.(true);
       }
     } catch (err: any) {
@@ -130,11 +143,17 @@ export function AIKeyModal({
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     const trimmed = cleanKeyInput(apiKey);
     saveStoredApiKeyForProvider(selectedProvider, trimmed);
     if (trimmed) {
       setActiveAIProvider(selectedProvider);
+    }
+    if (user) {
+      await saveUserAISettingsToAccount(user, {
+        activeProvider: trimmed ? selectedProvider : undefined,
+        providerKey: { provider: selectedProvider, key: trimmed },
+      });
     }
     setSavedSuccess(true);
     onKeySaved?.(Boolean(trimmed));
@@ -144,9 +163,14 @@ export function AIKeyModal({
     }, 700);
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
     saveStoredApiKeyForProvider(selectedProvider, "");
     setApiKey("");
+    if (user) {
+      await saveUserAISettingsToAccount(user, {
+        providerKey: { provider: selectedProvider, key: "" },
+      });
+    }
     setSavedSuccess(true);
     setTestResult(null);
     onKeySaved?.(hasAnyCustomApiKey());
@@ -158,6 +182,9 @@ export function AIKeyModal({
   const activeInfo = getActiveApiKeyInfo();
   const currentMeta = AI_PROVIDERS[selectedProvider];
   const hasKeyForSelected = Boolean(getStoredApiKeyForProvider(selectedProvider));
+  const activeModelDisplay = selectedProvider === "groq" 
+    ? getStoredGroqModel() 
+    : currentMeta.defaultModel;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -203,6 +230,40 @@ export function AIKeyModal({
             </div>
           </div>
         </DialogHeader>
+
+        {/* Account Sync Status Banner */}
+        {user ? (
+          <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-xl px-3 py-2 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
+            <div className="flex items-center gap-2">
+              <Cloud className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+              <span className="font-medium">
+                Syncing with account <span className="font-bold underline">{user.email}</span>
+              </span>
+            </div>
+            <Badge variant="outline" className="text-[10px] bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300">
+              Account Sync Active
+            </Badge>
+          </div>
+        ) : (
+          <div className="bg-muted/40 border border-border/80 rounded-xl p-2.5 flex items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <HardDrive className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-[11px] leading-tight">
+                Currently saving locally. Sign in with Google to sync keys across your devices.
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={signInWithGoogle}
+              className="h-7 text-xs px-2.5 gap-1 shrink-0 border-primary/30 text-primary hover:bg-primary/10 cursor-pointer font-medium"
+            >
+              <LogIn className="h-3 w-3" />
+              Sign In
+            </Button>
+          </div>
+        )}
 
         {highlightLimitReached && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-start gap-2.5 text-amber-900 dark:text-amber-200 text-xs">
@@ -274,7 +335,7 @@ export function AIKeyModal({
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-bold text-foreground">{currentMeta.name}</span>
-                <span className="text-[11px] text-muted-foreground">• Model: {currentMeta.defaultModel}</span>
+                <span className="text-[11px] text-muted-foreground">• Model: {activeModelDisplay}</span>
               </div>
               <div className="flex items-center gap-3">
                 <button
@@ -309,7 +370,15 @@ export function AIKeyModal({
               </label>
               {hasKeyForSelected && (
                 <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" /> Saved on this browser
+                  {user ? (
+                    <>
+                      <Cloud className="h-3 w-3 text-emerald-500" /> Saved to account
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="h-3 w-3" /> Saved on this device
+                    </>
+                  )}
                 </span>
               )}
             </div>
@@ -387,17 +456,23 @@ export function AIKeyModal({
           <div className="rounded-xl border border-border/60 bg-muted/20 p-3 space-y-1.5 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5 text-foreground font-medium">
               <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
-              <span>Privacy & Storage Guarantee</span>
+              <span>Security & Account Persistence</span>
             </div>
             <p className="text-[11px] leading-relaxed">
-              Your API keys are stored exclusively in your local device browser storage. They are never logged or stored on external servers.
+              {user 
+                ? "Your API keys and engine preferences are securely synced with your Google account. You can study from any phone, laptop, or browser without re-entering keys." 
+                : "Your API keys are stored in your device storage. Sign in with Google above to save and sync them across all your study devices."}
             </p>
           </div>
 
           {savedSuccess && (
             <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20 animate-in fade-in">
               <Check className="h-4 w-4" />
-              <span>AI Engine updated to {currentMeta.name} successfully!</span>
+              <span>
+                {user 
+                  ? `Saved & synced to account (${user.email}) for ${currentMeta.name}!` 
+                  : `AI Engine updated to ${currentMeta.name} successfully!`}
+              </span>
             </div>
           )}
         </div>
@@ -435,7 +510,7 @@ export function AIKeyModal({
               className="text-xs h-8 cursor-pointer gap-1.5"
             >
               <Check className="h-3.5 w-3.5" />
-              Save & Activate
+              {user ? "Save to Account" : "Save & Activate"}
             </Button>
           </div>
         </DialogFooter>

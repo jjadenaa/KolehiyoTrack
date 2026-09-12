@@ -8,8 +8,12 @@ import {
   isAutoSwitchAIEnabled,
   getAIProviderCandidates,
   setActiveAIProvider,
-  notifyAIAutoSwitched
+  notifyAIAutoSwitched,
+  getStoredGroqModel,
+  saveStoredGroqModel,
+  GROQ_CANDIDATE_MODELS,
 } from "./geminiKey";
+import { saveUserAISettingsToAccount } from "./userAISettings";
 import { getApiUrl } from "./apiUrl";
 
 // Allowed fallback models for Gemini
@@ -64,7 +68,103 @@ export async function testAIProviderConnection(
     }
   }
 
-  // Test OpenAI-compatible endpoints (Groq, OpenAI, OpenRouter, DeepSeek)
+  // Test Groq with multi-model auto-detection and fallback
+  if (provider === "groq") {
+    let candidateModels: string[] = [
+      getStoredGroqModel(),
+      "llama-3.1-8b-instant",
+      "openai/gpt-oss-120b",
+      "openai/gpt-oss-20b",
+      "qwen/qwen3.6-27b",
+      "llama-3.3-70b-versatile",
+      "llama3-70b-8192",
+      "llama-3-8b-8192",
+      "mixtral-8x7b-32768",
+    ];
+    candidateModels = Array.from(new Set(candidateModels.filter(Boolean)));
+
+    // Try to discover models active on user's Groq key
+    try {
+      const modelsRes = await fetch("https://api.groq.com/openai/v1/models", {
+        headers: { Authorization: `Bearer ${cleanKey}` },
+      });
+      if (modelsRes.ok) {
+        const modelsJson = await modelsRes.json();
+        const activeIds: string[] = (modelsJson?.data || [])
+          .filter((m: any) => m.active !== false && !m.id?.includes("whisper") && !m.id?.includes("guard"))
+          .map((m: any) => m.id);
+        if (activeIds.length > 0) {
+          const prioritized = candidateModels.filter((m) => activeIds.includes(m));
+          const remaining = activeIds.filter((m) => !prioritized.includes(m));
+          candidateModels = [...prioritized, ...remaining];
+        }
+      }
+    } catch {
+      // Continue with candidate models
+    }
+
+    let lastError = "";
+    for (const model of candidateModels) {
+      try {
+        const res = await fetch(meta.endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${cleanKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: [{ role: "user", content: "Respond with 'OK'." }],
+            max_tokens: 10,
+            temperature: 0.1,
+          }),
+        });
+
+        const responseText = await res.text();
+        let data: any = {};
+        try {
+          data = JSON.parse(responseText);
+        } catch {}
+
+        if (res.ok) {
+          saveStoredGroqModel(model);
+          saveUserAISettingsToAccount(null, {
+            providerKey: { provider: "groq", key: cleanKey },
+            groqModel: model,
+          }).catch(() => {});
+
+          return {
+            success: true,
+            message: `Connected successfully to Groq (${model})!`,
+          };
+        }
+
+        if (res.status === 401) {
+          return {
+            success: false,
+            message: "Invalid or unauthorized API key for Groq. Please check your key at console.groq.com.",
+          };
+        }
+
+        if (res.status === 404) {
+          lastError = data?.error?.message || `Model '${model}' is not available.`;
+          continue;
+        }
+
+        const errDetail = data?.error?.message || data?.message || `Server responded with status ${res.status}`;
+        lastError = errDetail;
+      } catch (err: any) {
+        lastError = err?.message || "Network error";
+      }
+    }
+
+    return {
+      success: false,
+      message: `Failed to connect to Groq: ${lastError || "No accessible model found for this key"}`,
+    };
+  }
+
+  // Test OpenAI-compatible endpoints (OpenAI, OpenRouter, DeepSeek)
   try {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -94,6 +194,10 @@ export async function testAIProviderConnection(
     } catch {}
 
     if (res.ok) {
+      saveUserAISettingsToAccount(null, {
+        providerKey: { provider, key: cleanKey },
+      }).catch(() => {});
+
       return {
         success: true,
         message: `Connected successfully to ${meta.name} (${meta.defaultModel})!`,
@@ -151,34 +255,59 @@ async function callOpenAICompatibleProvider(
     payloadMessages.push({ role: m.role, content: m.content });
   }
 
-  const body: any = {
-    model: meta.defaultModel,
-    messages: payloadMessages,
-    temperature: params.temperature ?? 0.7,
-  };
-
-  if (params.jsonMode && provider !== "groq") {
-    body.response_format = { type: "json_object" };
+  let currentModel = meta.defaultModel;
+  if (provider === "groq") {
+    currentModel = getStoredGroqModel() || "llama-3.1-8b-instant";
   }
 
-  const res = await fetch(meta.endpoint, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const sendRequest = async (modelName: string) => {
+    const body: any = {
+      model: modelName,
+      messages: payloadMessages,
+      temperature: params.temperature ?? 0.7,
+    };
 
-  const responseText = await res.text();
-  let data: any = {};
-  try {
-    data = JSON.parse(responseText);
-  } catch {}
+    if (params.jsonMode && provider !== "groq") {
+      body.response_format = { type: "json_object" };
+    }
 
-  if (!res.ok) {
-    const errDetail = data?.error?.message || data?.message || `Status ${res.status}`;
+    const res = await fetch(meta.endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    });
+
+    const responseText = await res.text();
+    let data: any = {};
+    try {
+      data = JSON.parse(responseText);
+    } catch {}
+
+    return { ok: res.ok, status: res.status, data, responseText };
+  };
+
+  let result = await sendRequest(currentModel);
+
+  // If Groq returns 404 (model deprecated/unavailable), seamlessly try candidate models
+  if (!result.ok && provider === "groq" && result.status === 404) {
+    const fallbacks = GROQ_CANDIDATE_MODELS.filter((m) => m !== currentModel);
+    for (const altModel of fallbacks) {
+      const altResult = await sendRequest(altModel);
+      if (altResult.ok) {
+        saveStoredGroqModel(altModel);
+        saveUserAISettingsToAccount(null, { groqModel: altModel }).catch(() => {});
+        result = altResult;
+        break;
+      }
+    }
+  }
+
+  if (!result.ok) {
+    const errDetail = result.data?.error?.message || result.data?.message || `Status ${result.status}`;
     throw new Error(`${meta.name} Error: ${errDetail}`);
   }
 
-  const content = data?.choices?.[0]?.message?.content;
+  const content = result.data?.choices?.[0]?.message?.content;
   if (!content) {
     throw new Error(`Empty response returned from ${meta.name}.`);
   }

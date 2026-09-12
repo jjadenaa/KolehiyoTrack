@@ -3,6 +3,7 @@ import { User, onAuthStateChanged, signInWithPopup, signOut } from "firebase/aut
 import { auth, googleProvider } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 import { setLocalAddedUniversities, setLocalExamDates } from "@/lib/userUniversities";
+import { syncUserAISettingsOnLogin, subscribeUserAISettings } from "@/lib/userAISettings";
 
 interface AuthContextType {
   user: User | null;
@@ -20,6 +21,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let unsubscribe: (() => void) | undefined;
+    let aiUnsubscribe: (() => void) | undefined;
     let lastUid: string | null = null;
 
     const clearUserLocalStorage = () => {
@@ -29,7 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const key = localStorage.key(i);
           if (key && (
             key.startsWith("iskolartrack_") || 
-            key.startsWith("kolehiyotrack_")
+            key.startsWith("kolehiyotrack_") ||
+            key.startsWith("sulyap_")
           )) {
             keysToClear.push(key);
           }
@@ -49,8 +52,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const currentUid = firebaseUser ? firebaseUser.uid : null;
           if (currentUid === null || (lastUid !== null && currentUid !== lastUid)) {
             // User signed out, unauthenticated, or switched account -> wipe cached local keys
+            if (aiUnsubscribe) {
+              aiUnsubscribe();
+              aiUnsubscribe = undefined;
+            }
             clearUserLocalStorage();
           }
+
+          if (firebaseUser) {
+            // Sync user's account AI settings into local cache & listen for cloud updates
+            syncUserAISettingsOnLogin(firebaseUser);
+            if (aiUnsubscribe) aiUnsubscribe();
+            aiUnsubscribe = subscribeUserAISettings(firebaseUser);
+          }
+
           lastUid = currentUid;
           setUser(firebaseUser);
           setLoading(false);
@@ -67,6 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       if (unsubscribe) {
         unsubscribe();
+      }
+      if (aiUnsubscribe) {
+        aiUnsubscribe();
       }
     };
   }, []);
@@ -104,7 +122,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const key = localStorage.key(i);
         if (key && (
           key.startsWith("iskolartrack_") || 
-          key.startsWith("kolehiyotrack_")
+          key.startsWith("kolehiyotrack_") ||
+          key.startsWith("sulyap_")
         )) {
           keysToClear.push(key);
         }

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { useAIQuota } from "@/lib/aiQuota";
 import { 
   AIProvider, 
@@ -10,7 +11,9 @@ import {
   getActiveAIProvider,
   getStoredApiKeyForProvider,
   saveStoredApiKeyForProvider,
+  getStoredGroqModel,
 } from "@/lib/geminiKey";
+import { saveUserAISettingsToAccount } from "@/lib/userAISettings";
 import { testAIProviderConnection } from "@/lib/geminiClientService";
 import {
   Dialog,
@@ -46,7 +49,8 @@ import {
   Palette,
   Sliders,
   BellRing,
-  BookOpen
+  BookOpen,
+  Cloud
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { APIKeyTutorialModal } from "@/components/APIKeyTutorialModal";
@@ -70,6 +74,7 @@ export function SettingsModal({
 
   const [activeTab, setActiveTab] = useState<"general" | "ai" | "feedback" | "about">(defaultTab);
   const { theme, toggleTheme } = useTheme();
+  const { user } = useAuth();
   const quota = useAIQuota();
 
   // Font size / study preference state
@@ -105,16 +110,22 @@ export function SettingsModal({
     }
   }, [isOpen, defaultTab, quota.autoSwitchEnabled]);
 
-  const handleToggleAutoSwitch = () => {
+  const handleToggleAutoSwitch = async () => {
     const nextVal = !autoSwitch;
     setAutoSwitch(nextVal);
     setAutoSwitchAIEnabled(nextVal);
+    if (user) {
+      await saveUserAISettingsToAccount(user, { autoSwitchEnabled: nextVal });
+    }
   };
 
-  const handleQuickSwitch = (provider: AIProvider) => {
+  const handleQuickSwitch = async (provider: AIProvider) => {
     setActiveAIProvider(provider);
     setSelectedProvider(provider);
     setApiKey(getStoredApiKeyForProvider(provider));
+    if (user) {
+      await saveUserAISettingsToAccount(user, { activeProvider: provider });
+    }
   };
 
   const handleSelectProvider = (prov: AIProvider) => {
@@ -147,6 +158,12 @@ export function SettingsModal({
       if (res.success) {
         saveStoredApiKeyForProvider(selectedProvider, cleanKey);
         setActiveAIProvider(selectedProvider);
+        if (user) {
+          await saveUserAISettingsToAccount(user, {
+            activeProvider: selectedProvider,
+            providerKey: { provider: selectedProvider, key: cleanKey },
+          });
+        }
       }
     } catch (err: any) {
       setTestResult({
@@ -158,11 +175,17 @@ export function SettingsModal({
     }
   };
 
-  const handleSaveKey = () => {
+  const handleSaveKey = async () => {
     const trimmed = cleanKeyInput(apiKey);
     saveStoredApiKeyForProvider(selectedProvider, trimmed);
     if (trimmed) {
       setActiveAIProvider(selectedProvider);
+    }
+    if (user) {
+      await saveUserAISettingsToAccount(user, {
+        activeProvider: trimmed ? selectedProvider : undefined,
+        providerKey: { provider: selectedProvider, key: trimmed },
+      });
     }
     setSavedSuccess(true);
     setTimeout(() => {
@@ -170,9 +193,14 @@ export function SettingsModal({
     }, 1500);
   };
 
-  const handleClearKey = () => {
+  const handleClearKey = async () => {
     saveStoredApiKeyForProvider(selectedProvider, "");
     setApiKey("");
+    if (user) {
+      await saveUserAISettingsToAccount(user, {
+        providerKey: { provider: selectedProvider, key: "" },
+      });
+    }
     setSavedSuccess(true);
     setTestResult(null);
     setTimeout(() => {
@@ -607,7 +635,9 @@ export function SettingsModal({
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-foreground">{currentMeta.name}</span>
-                      <span className="text-[11px] text-muted-foreground">• Model: {currentMeta.defaultModel}</span>
+                      <span className="text-[11px] text-muted-foreground">
+                        • Model: {selectedProvider === "groq" ? getStoredGroqModel() : currentMeta.defaultModel}
+                      </span>
                     </div>
                     <a
                       href={currentMeta.getKeyUrl}
@@ -632,7 +662,15 @@ export function SettingsModal({
                     </label>
                     {hasKeyForSelected && (
                       <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 className="h-3 w-3" /> Stored locally
+                        {user ? (
+                          <>
+                            <Cloud className="h-3 w-3 text-emerald-500" /> Saved to account
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="h-3 w-3" /> Stored locally
+                          </>
+                        )}
                       </span>
                     )}
                   </div>
@@ -706,7 +744,7 @@ export function SettingsModal({
                       className="text-xs h-8 gap-1.5 cursor-pointer"
                     >
                       <Check className="h-3.5 w-3.5" />
-                      Save & Activate
+                      {user ? "Save to Account" : "Save & Activate"}
                     </Button>
                   </div>
                 </div>
@@ -732,7 +770,11 @@ export function SettingsModal({
                 {savedSuccess && (
                   <div className="flex items-center gap-2 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 p-2.5 rounded-lg border border-emerald-500/20 animate-in fade-in">
                     <Check className="h-4 w-4" />
-                    <span>AI Engine updated to {currentMeta.name} successfully!</span>
+                    <span>
+                      {user
+                        ? `Saved & synced to account (${user.email}) for ${currentMeta.name}!`
+                        : `AI Engine updated to ${currentMeta.name} successfully!`}
+                    </span>
                   </div>
                 )}
               </div>
