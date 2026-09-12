@@ -13,6 +13,16 @@ export const CURRENT_VERSION = "v0.3.2 Beta";
 
 // 2. Add or update release notes here (newest first)
 export const CHANGELOG_DATA: ChangelogItem[] = [
+       {
+    version: "v0.3.3",
+    date: "September 11, 2026",
+    changes: [
+      {
+        title: "Added USTET and bug fixes",
+        description: "Added USTET support and added more ways to make mock tests"
+      }
+    ]
+  },
     {
     version: "v0.3.2",
     date: "September 5, 2026",
@@ -20,6 +30,10 @@ export const CHANGELOG_DATA: ChangelogItem[] = [
       {
         title: "Added ability to add own API key and bug fixes",
         description: "Fixed AI coudn't generate by letting user upload their own API key"
+      },
+      {
+        title: "KaTeX Math & Markdown AI Rendering + Fullscreen Study Suite",
+        description: "Added comprehensive KaTeX math notation support across the site, rich Markdown rendering (headings, dividers, structured bullet and numbered lists, tables), space-saving compact dashboard bar, and a dedicated distraction-free Fullscreen AI study mode with quick floating launch."
       }
     ]
   },

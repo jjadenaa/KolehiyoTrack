@@ -1,5 +1,3 @@
-import { TOPIC_GROUPS, ALL_TOPICS_VALUE } from "./subjectConstants";
-
 export interface SubjectItem {
   id: string;
   label: string;
@@ -9,8 +7,7 @@ export function buildAIPromptForUniversity(
   universityId: string,
   availableSubjects: SubjectItem[],
   selectedSubjects: Record<string, boolean>,
-  itemCounts: Record<string, number>,
-  selectedTopics: Record<string, string[]> = {}
+  itemCounts: Record<string, number>
 ): string {
   const selected = availableSubjects.filter((s) => selectedSubjects[s.id]);
   if (selected.length === 0) {
@@ -92,29 +89,9 @@ export function buildAIPromptForUniversity(
 
   for (const subject of selected) {
     const count = itemCounts[subject.id] || 10;
-    const topics = selectedTopics[subject.id] ?? [ALL_TOPICS_VALUE];
-    const isAll = topics.length === 0 || topics.includes(ALL_TOPICS_VALUE);
-    const allTopicOptions = (TOPIC_GROUPS[subject.id] ?? []).flatMap((g) => g.options);
-    const specificTopics = isAll ? allTopicOptions.map((t) => t.value) : topics;
-    const topicLabels = specificTopics.map((t) => allTopicOptions.find((o) => o.value === t)?.label || t);
 
     parts.push(`--- ${subject.label} ---`);
     parts.push(`Generate exactly ${count} questions for ${subject.label}.`);
-
-    if (isAll && topicLabels.length > 0) {
-      const perTopic = Math.floor(count / topicLabels.length);
-      const remainder = count % topicLabels.length;
-      parts.push("");
-      parts.push("DISTRIBUTE questions evenly across these topics:");
-      topicLabels.forEach((label, i) => {
-        const topicCount = i < remainder ? perTopic + 1 : perTopic;
-        parts.push(`  - ${label}: ${topicCount} questions`);
-      });
-      parts.push("");
-      parts.push("When 'All Topics' is selected, spread questions equally across the available topics so each topic gets fair representation.");
-    } else if (!isAll && topicLabels.length > 0) {
-      parts.push(`Focus ONLY on these topics: ${topicLabels.join(", ")}.`);
-    }
 
     if (subject.id === "reading_english" || subject.id === "reading_filipino") {
       const lang = subject.id === "reading_english" ? "English" : "Filipino (Tagalog/Filipino language)";

@@ -44,16 +44,23 @@ const UNIVERSITIES = [
   },
   {
     id: 'ateneo',
-    name: 'Ateneo de Manila University - (ACET 2028)',
+    name: 'Ateneo de Manila University - (ACET 2027)',
     date: 'Sept 19 – 27, 2026',
     applyUrl: 'https://ateneo.admissions.ph/',
     description: ''
   },
   {
     id: 'dlsu',
-    name: 'De La Salle University - (DCAT 2028)',
+    name: 'De La Salle University - (DCAT 2027)',
     date: 'Sept 5 – Dec 6, 2026',
     applyUrl: 'https://applyarchershub.dlsu.edu.ph/ApplicationLandingPage/index/DLSU',
+    description: ''
+  },
+  {
+    id: 'ust',
+    name: 'University of Santo Tomas - (USTET 2027)',
+    date: 'Oct 3, 2026 – Jan 31, 2027',
+    applyUrl: 'https://ustet.ust.edu.ph/',
     description: ''
   },
   {
@@ -130,12 +137,39 @@ const APPLICATION_TIMELINES: ApplicationTimeline[] = [
     applyUrl: "https://ustet.ust.edu.ph/home?id=blue",
   },
   {
-    id: "bsu",
-    fullName: "Batangas State University",
-    openStr: "August 2026",
+    id: "bulsu",
+    fullName: "Bulacan State University",
+    openStr: "August 25, 2026",
+    closeStr: "November 27, 2026",
+    openDate: new Date("2026-08-25T00:00:00"),
+    closeDate: new Date("2026-11-27T23:59:59"),
+    applyUrl: "https://bulsu.edu.ph/",
+  },
+  {
+    id: "feu",
+    fullName: "Far Eastern University",
+    openStr: "September 5, 2026",
     closeStr: "TBA",
-    openDate: new Date("2026-08-01T00:00:00"),
-    applyUrl: "https://batstate-u.edu.ph/",
+    openDate: new Date("2026-09-05T00:00:00"),
+    applyUrl: "https://www.feu.edu.ph/",
+  },
+  {
+    id: "naap",
+    fullName: "National Aviation Academy of the Philippines",
+    openStr: "September 1, 2026",
+    closeStr: "October 31, 2026",
+    openDate: new Date("2026-09-01T00:00:00"),
+    closeDate: new Date("2026-10-31T23:59:59"),
+    applyUrl: "https://caap.gov.ph/",
+  },
+  {
+    id: "plm",
+    fullName: "Pamantasan ng Lungsod ng Maynila",
+    openStr: "August 14, 2026",
+    closeStr: "September 30, 2026",
+    openDate: new Date("2026-08-14T00:00:00"),
+    closeDate: new Date("2026-09-30T23:59:59"),
+    applyUrl: "https://plm.edu.ph/",
   },
   {
     id: "pnu",

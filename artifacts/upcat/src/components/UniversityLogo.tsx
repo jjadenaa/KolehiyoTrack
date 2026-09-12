@@ -50,6 +50,16 @@ export function UniversityLogo({ universityId, className = "h-12 w-12 object-con
     );
   }
 
+  if (id === "ust" || id === "ustet") {
+    return (
+      <img
+        src={`${baseUrl}ust-logo.svg`}
+        alt={alt || "UST Logo"}
+        className={className}
+      />
+    );
+  }
+
   return (
     <div className={`rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary ${className}`}>
       {id.slice(0, 2).toUpperCase()}

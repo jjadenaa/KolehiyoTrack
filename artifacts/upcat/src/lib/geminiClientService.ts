@@ -291,11 +291,11 @@ async function executeSingleChat(
       throw new Error(`No API key configured for ${AI_PROVIDERS[provider].name}.`);
     }
 
-    const systemInstruction = `You are "Isko AI", an ultra-fast, brilliant Philippine College Entrance Test (UPCAT, ACET, DCAT, USTET, PLMAT, BUCET) tutor and academic companion.
-Provide clear, step-by-step guidance, formulas in KaTeX ($...$ or $$...$$), and practical Filipino test-taking strategies. Always remain encouraging, concise, and academically rigorous.`;
+    const systemInstruction = `You are "Isko AI", an ultra-fast, accurate Philippine College Entrance Test (UPCAT, ACET, DCAT, USTET, PLMAT, BUCET) tutor.
+Be concise, direct, and fast to read (150-250 words max). Skip pleasantries and conversational filler. Directly provide the solution, formulas in KaTeX ($...$ or $$...$$), and 30-second CET exam shortcut tips. Ensure 100% accuracy.`;
 
     const messages = [
-      ...history.map((h) => ({
+      ...history.slice(-6).map((h) => ({
         role: h.role === "assistant" || h.role === "model" ? "assistant" : "user",
         content: h.text,
       })),
@@ -305,7 +305,8 @@ Provide clear, step-by-step guidance, formulas in KaTeX ($...$ or $$...$$), and 
     return await callOpenAICompatibleProvider(provider, key, {
       systemInstruction,
       messages,
-      temperature: 0.7,
+      temperature: 0.4,
+      max_tokens: 600,
     });
   }
 
@@ -367,13 +368,13 @@ Provide clear, step-by-step guidance, formulas in KaTeX ($...$ or $$...$$), and 
       parts: [{ text: message }],
     });
 
-    const systemInstruction = `You are "Isko AI", an ultra-fast, brilliant Philippine College Entrance Test (UPCAT, ACET, DCAT, USTET, PLMAT, BUCET) tutor and academic companion.
-Provide clear, step-by-step guidance, formulas in KaTeX ($...$ or $$...$$), and Filipino test-taking strategies.`;
+    const systemInstruction = `You are "Isko AI", an ultra-fast, accurate Philippine College Entrance Test (UPCAT, ACET, DCAT, USTET, PLMAT, BUCET) academic tutor.
+Be concise, direct, and fast to read (150-250 words max). Skip pleasantries and conversational filler. Directly provide the solution, formulas in KaTeX ($...$ or $$...$$), and 30-second CET exam shortcuts. Ensure 100% mathematical and conceptual accuracy.`;
 
     return await callDirectClientGemini(storedKey, {
       systemInstruction,
       contents: formattedContents,
-      temperature: 0.7,
+      temperature: 0.4,
     });
   }
 

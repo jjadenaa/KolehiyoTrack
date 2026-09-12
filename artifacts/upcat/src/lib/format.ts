@@ -78,22 +78,41 @@ export const SECONDS_PER_ITEM_ATENEO: Record<string, number> = {
 };
 
 // Seconds per item for DLSU (DCAT)
-// Math Proficiency: ~50 items / 50m (60s)
-// Statistics & Research: ~40 items / 50m (75s)
-// Science Subtest: ~45 items / 35m (~47s)
-// Language Proficiency & EAPP: ~50 items / 35m (~42s)
-// Reading Comprehension: ~30 items / 35m (~70s)
-// Mental Ability / Abstract Reasoning: ~40 items / 25m (~38s)
+// Reasoning: 30 items / 30m (60s)
+// English: 40 items / 40m (60s)
+// Reading Comprehension: 40 items / 30m (45s)
+// Statistics: 45 items / 40m (~53s)
+// Mathematics: 45 items / 50m (~67s)
+// Science: 50 items / 50m (60s)
 export const SECONDS_PER_ITEM_DLSU: Record<string, number> = {
+  abstract_reasoning: 60,
+  language_english: 60,
+  reading_english: 45,
+  statistics_research: 53,
+  math: 67,
+  science: 60,
+  language_filipino: 60,
+  reading_filipino: 45,
+  logical_reasoning: 60,
+  numerical_ability: 67,
+  general_info: 30,
+};
+
+// Seconds per item for UST (USTET 2027)
+// Mental Ability: 60 items / 45m (45s)
+// Language Proficiency: 80 items / 60m (45s)
+// Mathematics: 60 items / 60m (60s)
+// Science: 80 items / 60m (45s)
+export const SECONDS_PER_ITEM_UST: Record<string, number> = {
+  abstract_reasoning: 45,
+  language_english: 45,
   math: 60,
-  statistics_research: 75,
-  science: 47,
-  language_english: 42,
-  reading_english: 70,
-  language_filipino: 42,
-  reading_filipino: 70,
-  abstract_reasoning: 38,
-  logical_reasoning: 38,
+  science: 45,
+  reading_english: 45,
+  language_filipino: 45,
+  reading_filipino: 45,
+  statistics_research: 60,
+  logical_reasoning: 45,
   numerical_ability: 60,
   general_info: 30,
 };
@@ -104,6 +123,7 @@ export function getSecondsPerItem(subject: string, universityId: string = "upcat
   if (uni === "bu" || uni === "bucet") perItemMap = SECONDS_PER_ITEM_BU;
   else if (uni === "ateneo" || uni === "admu" || uni === "acet") perItemMap = SECONDS_PER_ITEM_ATENEO;
   else if (uni === "dlsu" || uni === "dcat") perItemMap = SECONDS_PER_ITEM_DLSU;
+  else if (uni === "ust" || uni === "ustet") perItemMap = SECONDS_PER_ITEM_UST;
 
   return perItemMap[subject] ?? 60;
 }
@@ -114,10 +134,67 @@ export function calcTotalSeconds(
   universityId: string = "upcat"
 ): number {
   const uni = (universityId || "").toLowerCase();
+
+  // For DLSU / DCAT exact section durations specified in official test breakdowns
+  if (uni === "dlsu" || uni === "dcat") {
+    // Exact section duration in minutes for default item counts:
+    // Reasoning: 30 items -> 30 mins (1800s)
+    // English: 40 items -> 40 mins (2400s)
+    // Reading Comprehension: 40 items -> 30 mins (1800s)
+    // Statistics: 45 items -> 40 mins (2400s)
+    // Mathematics: 45 items -> 50 mins (3000s)
+    // Science: 50 items -> 50 mins (3000s)
+    const exactSectionSeconds: Record<string, { defaultItems: number; defaultSecs: number }> = {
+      abstract_reasoning: { defaultItems: 30, defaultSecs: 30 * 60 },
+      language_english: { defaultItems: 40, defaultSecs: 40 * 60 },
+      reading_english: { defaultItems: 40, defaultSecs: 30 * 60 },
+      statistics_research: { defaultItems: 45, defaultSecs: 40 * 60 },
+      math: { defaultItems: 45, defaultSecs: 50 * 60 },
+      science: { defaultItems: 50, defaultSecs: 50 * 60 },
+    };
+
+    return Object.entries(selectedSubjects)
+      .filter(([, selected]) => selected)
+      .reduce((total, [subj]) => {
+        const count = itemCounts[subj] || 0;
+        const exact = exactSectionSeconds[subj];
+        if (exact && count === exact.defaultItems) {
+          return total + exact.defaultSecs;
+        }
+        const secs = SECONDS_PER_ITEM_DLSU[subj] ?? 60;
+        return total + count * secs;
+      }, 0);
+  }
+
+  // For UST / USTET exact section durations specified in official test breakdowns
+  if (uni === "ust" || uni === "ustet") {
+    // Mental Ability: 60 items -> 45 mins (2700s)
+    // Language Proficiency: 80 items -> 60 mins (3600s)
+    // Mathematics: 60 items -> 60 mins (3600s)
+    // Science: 80 items -> 60 mins (3600s)
+    const exactSectionSeconds: Record<string, { defaultItems: number; defaultSecs: number }> = {
+      abstract_reasoning: { defaultItems: 60, defaultSecs: 45 * 60 },
+      language_english: { defaultItems: 80, defaultSecs: 60 * 60 },
+      math: { defaultItems: 60, defaultSecs: 60 * 60 },
+      science: { defaultItems: 80, defaultSecs: 60 * 60 },
+    };
+
+    return Object.entries(selectedSubjects)
+      .filter(([, selected]) => selected)
+      .reduce((total, [subj]) => {
+        const count = itemCounts[subj] || 0;
+        const exact = exactSectionSeconds[subj];
+        if (exact && count === exact.defaultItems) {
+          return total + exact.defaultSecs;
+        }
+        const secs = SECONDS_PER_ITEM_UST[subj] ?? 45;
+        return total + count * secs;
+      }, 0);
+  }
+
   let perItemMap = SECONDS_PER_ITEM_UPCAT;
   if (uni === "bu" || uni === "bucet") perItemMap = SECONDS_PER_ITEM_BU;
   else if (uni === "ateneo" || uni === "admu" || uni === "acet") perItemMap = SECONDS_PER_ITEM_ATENEO;
-  else if (uni === "dlsu" || uni === "dcat") perItemMap = SECONDS_PER_ITEM_DLSU;
 
   return Object.entries(selectedSubjects)
     .filter(([, selected]) => selected)
@@ -142,12 +219,20 @@ export function getAvailableSubjectsForUniversity(uniId: string): { id: string; 
   }
   if (uni === "dlsu" || uni === "dcat") {
     return [
-      { id: "math", label: "Mathematics & Statistics" },
-      { id: "statistics_research", label: "Statistics & Research" },
-      { id: "science", label: "Science Subtest" },
-      { id: "language_english", label: "Language Proficiency & EAPP" },
+      { id: "abstract_reasoning", label: "Reasoning" },
+      { id: "language_english", label: "English" },
       { id: "reading_english", label: "Reading Comprehension" },
-      { id: "abstract_reasoning", label: "Mental Ability / Abstract Reasoning" },
+      { id: "statistics_research", label: "Statistics" },
+      { id: "math", label: "Mathematics" },
+      { id: "science", label: "Science" },
+    ];
+  }
+  if (uni === "ust" || uni === "ustet") {
+    return [
+      { id: "abstract_reasoning", label: "Mental Ability" },
+      { id: "language_english", label: "Language Proficiency" },
+      { id: "math", label: "Mathematics" },
+      { id: "science", label: "Science" },
     ];
   }
   if (uni === "bu" || uni === "bucet") {
@@ -186,12 +271,20 @@ export function getDefaultItemCounts(uniId: string): Record<string, number> {
   }
   if (uni === "dlsu" || uni === "dcat") {
     return {
-      math: 50,
-      statistics_research: 40,
-      science: 45,
-      language_english: 50,
-      reading_english: 30,
-      abstract_reasoning: 40,
+      abstract_reasoning: 30,
+      language_english: 40,
+      reading_english: 40,
+      statistics_research: 45,
+      math: 45,
+      science: 50,
+    };
+  }
+  if (uni === "ust" || uni === "ustet") {
+    return {
+      abstract_reasoning: 60,
+      language_english: 80,
+      math: 60,
+      science: 80,
     };
   }
   if (uni === "bu" || uni === "bucet") {

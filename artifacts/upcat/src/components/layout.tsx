@@ -34,8 +34,9 @@ import { UniversityLogo } from "@/components/UniversityLogo";
 
 const UNIVERSITIES = [
   { id: 'upcat', name: 'University of the Philippines - (UPCAT 2028)', shortName: 'UPCAT', date: 'TBA' },
-  { id: 'ateneo', name: 'Ateneo de Manila University - (ACET 2028)', shortName: 'ACET', date: 'TBA' },
-  { id: 'dlsu', name: 'De La Salle University - (DCAT 2028)', shortName: 'DCAT', date: 'TBA' },
+  { id: 'ateneo', name: 'Ateneo de Manila University - (ACET 2027)', shortName: 'ACET', date: 'TBA' },
+  { id: 'dlsu', name: 'De La Salle University - (DCAT 2027)', shortName: 'DCAT', date: 'TBA' },
+  { id: 'ust', name: 'University of Santo Tomas - (USTET 2027)', shortName: 'USTET', date: 'TBA' },
   { id: 'bu', name: 'Bicol University - (BUCET 2027)', shortName: 'BUCET', date: 'November 19, 2026' }
 ];
 

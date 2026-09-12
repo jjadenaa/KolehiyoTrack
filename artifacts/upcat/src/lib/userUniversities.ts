@@ -89,6 +89,7 @@ export const DEFAULT_UNIVERSITY_EXAM_DATES: Record<string, { label: string; defa
   upcat: { label: "TBA" },
   ateneo: { label: "Sept 19 – 27, 2026", defaultTargetDate: "2026-09-19" },
   dlsu: { label: "Sept 5 – Dec 6, 2026", defaultTargetDate: "2026-09-05" },
+  ust: { label: "Oct 3, 2026 – Jan 31, 2027", defaultTargetDate: "2026-10-03" },
   bu: { label: "Aug 20 – Dec 6, 2026", defaultTargetDate: "2026-08-20" },
 };
 

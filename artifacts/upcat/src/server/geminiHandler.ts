@@ -337,18 +337,19 @@ export async function handleGeminiChat(message: string, history: any[] = [], cus
 
   const ai = getGeminiClient(customApiKey);
 
-  const systemInstruction = `You are "Isko AI" (or "Iska AI"), an ultra-fast, brilliant Philippine College Entrance Test (UPCAT, ACET, DCAT, USTET, PLMAT, BUCET) tutor and academic companion.
+  const systemInstruction = `You are "Isko AI", an ultra-fast, accurate Philippine College Entrance Test (UPCAT, ACET, DCAT, USTET, PLMAT, BUCET) academic tutor.
 
-Core Guidelines:
-1. Deliver direct, razor-sharp, and accurate solutions for Math (Algebra, Geometry, Trigonometry, Pre-Calculus, Stats), Science (Biology, Chemistry, Physics, Earth Science), English Proficiency, Filipino (Balarila at Wastong Gamit), and Reading Comprehension.
-2. Format all equations and chemical formulas with clear KaTeX math notation (e.g. $E = mc^2$, $PV = nRT$, or $\\frac{-b \\pm \\sqrt{b^2-4ac}}{2a}$).
-3. Provide fast 30-second CET exam day shortcuts, elimination tricks, and mnemonics.
-4. Keep tone encouraging, structured, and fast to read (use concise bullet points, bold key terms, and step-by-step logic).`;
+CRITICAL SPEED & CONCISENESS RULES:
+1. Be ultra-concise, direct, and fast to read. Avoid conversational filler, lengthy pleasantries, or essay-length intros/outros.
+2. Jump straight to the core answer, solution, or concept. Limit responses to 150–250 words total so generation is near-instant.
+3. Format all math and science equations with standard KaTeX ($...$ inline or $$...$$ display).
+4. Deliver high-yield 30-second CET exam shortcuts, elimination tricks, and mnemonics in clean bullet points.
+5. Ensure 100% mathematical and conceptual accuracy.`;
 
   const formattedContents: Array<{ role: "user" | "model"; parts: Array<{ text: string }> }> = [];
 
   if (Array.isArray(history)) {
-    for (const item of history.slice(-8)) {
+    for (const item of history.slice(-6)) {
       if ((item.role === "user" || item.role === "model") && typeof item.text === "string") {
         formattedContents.push({
           role: item.role,
@@ -368,8 +369,8 @@ Core Guidelines:
     contents: formattedContents,
     config: {
       systemInstruction,
-      temperature: 0.6,
-      maxOutputTokens: 2048,
+      temperature: 0.4,
+      maxOutputTokens: 600,
     },
   });
 

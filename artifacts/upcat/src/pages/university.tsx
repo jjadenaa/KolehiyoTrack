@@ -280,190 +280,7 @@ function ExamPreparedness({ sessions }: { sessions: Session[] }) {
   )
 }
 
-// ─── Topic definitions ────────────────────────────────────────────────────────
-
-const ALL_TOPICS_VALUE = "__all__";
-
-const TOPIC_GROUPS: Record<string, { label: string; options: { value: string; label: string }[] }[]> = {
-  language_english: [
-    {
-      label: "Language Proficiency (English)",
-      options: [
-        { value: "vocabulary_and_analogy", label: "Vocabulary and Analogy" },
-        { value: "sentence_sequencing", label: "Sentence Sequencing and Arrangement" },
-        { value: "sentence_completion", label: "Sentence Completion and Improvement" },
-        { value: "identifying_error", label: "Identifying Error in the Sentence" },
-        { value: "idiomatic_expression", label: "Idiomatic Expression" },
-        { value: "related_pair_of_words", label: "Related Pair of Words" },
-        { value: "correct_word_usage", label: "Correct Word Usage" },
-      ],
-    },
-  ],
-  language_filipino: [
-    {
-      label: "Language Proficiency (Filipino)",
-      options: [
-        { value: "bokabularyo_at_paghahalintulad", label: "Bokabularyo at Paghahalintulad" },
-        { value: "pagkakasunod_ng_pangungusap", label: "Pagkakasunod-sunod ng Pangungusap" },
-        { value: "pagkumpleto_ng_pangungusap", label: "Pagkumpleto at Pagpapabuti ng Pangungusap" },
-        { value: "pagkilala_ng_mali", label: "Pagkilala ng Mali sa Pangungusap" },
-        { value: "idyomatikong_ekspresyon", label: "Idyomatikong Ekspresyon" },
-        { value: "magkaugnay_na_pares", label: "Magkaugnay na Pares ng Salita" },
-        { value: "wastong_gamit_ng_salita", label: "Wastong Gamit ng Salita" },
-      ],
-    },
-  ],
-  math: [
-    {
-      label: "Mathematics",
-      options: [
-        { value: "algebra_numbers_integers", label: "Algebra of Numbers and Integers" },
-        { value: "decimals_fractions_percent", label: "Decimals, Fractions and Percent" },
-        { value: "scientific_notation", label: "Scientific Notation" },
-        { value: "ratio_proportion", label: "Ratio and Proportion" },
-        { value: "variations", label: "Variations" },
-        { value: "statistics", label: "Statistics" },
-        { value: "number_series_progressions", label: "Number Series and Progressions" },
-        { value: "algebra_polynomials", label: "Algebra (Polynomials, Rational Expressions)" },
-        { value: "plane_geometry", label: "Plane Geometry" },
-        { value: "analytic_geometry", label: "Analytic Geometry" },
-        { value: "trigonometry", label: "Trigonometry" },
-        { value: "word_problems", label: "Word Problems (Coin, Age, Investment, etc.)" },
-      ],
-    },
-  ],
-  science: [
-    {
-      label: "Chemistry",
-      options: [
-        { value: "chem_matter", label: "Matter" },
-        { value: "chem_energy", label: "Energy" },
-        { value: "chem_phases_of_matter", label: "Phases of Matter" },
-        { value: "chem_atomic_structure", label: "Atomic Structure" },
-        { value: "chem_valence_dot_diagrams", label: "Valence and Dot Diagrams" },
-        { value: "chem_quantum_numbers", label: "Quantum Numbers" },
-        { value: "chem_ions_octet_rules", label: "Ions and Octet Rules" },
-        { value: "chem_periodic_table", label: "Periodic Table and Periodic Trends" },
-        { value: "chem_bonding", label: "Bonding" },
-        { value: "chem_stoichiometry", label: "Stoichiometry" },
-      ],
-    },
-    {
-      label: "General Science",
-      options: [
-        { value: "gen_measurement", label: "Measurement" },
-        { value: "gen_force", label: "Force" },
-        { value: "gen_friction", label: "Friction" },
-        { value: "gen_work", label: "Work" },
-        { value: "gen_matter", label: "Matter" },
-        { value: "gen_plasma_plastics_metal_alloy", label: "Plasma, Plastics, Metal, Alloy" },
-        { value: "gen_biomass_fossil_fuels", label: "Biomass vs Fossil Fuels" },
-        { value: "gen_water", label: "Water" },
-        { value: "gen_air_pollutant", label: "Air Pollutant" },
-        { value: "gen_materials_properties", label: "Materials Properties" },
-        { value: "gen_melting_boiling", label: "Melting and Boiling Point" },
-        { value: "gen_diffusion_osmosis", label: "Diffusion vs Osmosis" },
-        { value: "gen_nuclear_fission", label: "Nuclear and Nuclear Fission" },
-        { value: "gen_geothermal_energy", label: "Geothermal Energy" },
-        { value: "gen_weather_climate", label: "Weather and Climate" },
-        { value: "gen_objects_space", label: "Objects in Space" },
-        { value: "gen_layers_atmosphere", label: "Layers of Atmosphere" },
-        { value: "gen_position_earth", label: "Position of Earth in the Universe" },
-        { value: "gen_motion_earth", label: "Motion of Earth in Space" },
-        { value: "gen_layers_earth", label: "Layers of Earth" },
-        { value: "gen_rocks_minerals", label: "Rocks and Minerals" },
-        { value: "gen_branches_of_science", label: "Branches of Science" },
-        { value: "gen_moon", label: "Moon" },
-      ],
-    },
-    {
-      label: "Biology",
-      options: [
-        { value: "bio_living_things", label: "Living Things" },
-        { value: "bio_cellular_energetics", label: "Cellular Energetics" },
-        { value: "bio_genetics", label: "Genetics" },
-        { value: "bio_cell_reproduction", label: "Cell Reproduction" },
-        { value: "bio_heredity", label: "Heredity" },
-        { value: "bio_diversity_organisms", label: "Diversity of Organisms" },
-        { value: "bio_plants", label: "Plants" },
-        { value: "bio_animal_structures", label: "Animal Structures and Functions (Body Systems)" },
-        { value: "bio_evolution", label: "Evolution" },
-        { value: "bio_animal_behavior", label: "Animal Behavior and Energy" },
-      ],
-    },
-    {
-      label: "Physics",
-      options: [
-        { value: "phys_subdivision", label: "Subdivision of Physics" },
-        { value: "phys_measurement", label: "Measurement" },
-        { value: "phys_scalar_vectors", label: "Scalar and Vectors" },
-        { value: "phys_newton_laws", label: "Newton's Laws of Motion" },
-        { value: "phys_momentum", label: "Momentum" },
-        { value: "phys_work", label: "Work" },
-        { value: "phys_energy", label: "Energy" },
-      ],
-    },
-  ],
-  numerical_ability: [
-    {
-      label: "Numerical Ability",
-      options: [
-        { value: "arithmetic_operations", label: "Arithmetic Operations & Fractions/Decimals" },
-        { value: "number_series", label: "Number Series & Numerical Sequences" },
-        { value: "quantitative_comparison", label: "Quantitative Comparison & Estimation" },
-        { value: "mental_math", label: "Mental Math & Fast Calculations" },
-      ],
-    },
-  ],
-  statistics_research: [
-    {
-      label: "Statistics & Research",
-      options: [
-        { value: "measures_central_tendency", label: "Measures of Central Tendency & Dispersion" },
-        { value: "probability_combinatorics", label: "Probability, Permutations & Combinations" },
-        { value: "normal_distribution", label: "Normal Distribution & Data Interpretation" },
-        { value: "research_methodology", label: "Research Methodology, Variables & Hypotheses" },
-        { value: "business_math", label: "Business Math (Interest, Profit/Loss, Break-even)" },
-      ],
-    },
-  ],
-  logical_reasoning: [
-    {
-      label: "Logical Reasoning",
-      options: [
-        { value: "syllogisms_deductive", label: "Syllogisms & Deductive Reasoning" },
-        { value: "analytical_puzzles", label: "Analytical Puzzles & Relational Logic" },
-        { value: "conditional_logic", label: "Conditional Statements (If-Then Logic)" },
-        { value: "venn_diagrams_sets", label: "Venn Diagrams & Set Logic" },
-      ],
-    },
-  ],
-  abstract_reasoning: [
-    {
-      label: "Abstract Reasoning",
-      options: [
-        { value: "spatial_patterns_matrices", label: "Spatial Patterns & Matrices" },
-        { value: "figure_rotations_folding", label: "Figure Rotations & Paper Folding" },
-        { value: "number_figure_series", label: "Number & Figure Series Progression" },
-        { value: "rule_identification", label: "Non-Verbal Rule Identification" },
-      ],
-    },
-  ],
-  general_info: [
-    {
-      label: "Analogies & General Info",
-      options: [
-        { value: "advanced_analogies", label: "Advanced Verbal Analogies" },
-        { value: "philippine_history_civics", label: "Philippine History, Civics & Constitution" },
-        { value: "world_history_geography", label: "World History & Geography" },
-        { value: "arts_literature_culture", label: "Arts, Literature & Filipino Culture" },
-        { value: "current_affairs", label: "Current Events & General Knowledge" },
-      ],
-    },
-  ],
-  reading_english: [],
-  reading_filipino: [],
-};
+// ─── Subject definitions ────────────────────────────────────────────────────────
 
 export type SubjectId =
   | "language_english"
@@ -507,12 +324,20 @@ export function getAvailableSubjectsForUniversity(uniId: string): { id: SubjectI
   }
   if (uni === "dlsu" || uni === "dcat") {
     return [
-      { id: "math", label: "Mathematics & Statistics" },
-      { id: "statistics_research", label: "Statistics & Research" },
-      { id: "science", label: "Science Subtest" },
-      { id: "language_english", label: "Language Proficiency & EAPP" },
+      { id: "abstract_reasoning", label: "Reasoning" },
+      { id: "language_english", label: "English" },
       { id: "reading_english", label: "Reading Comprehension" },
-      { id: "abstract_reasoning", label: "Mental Ability / Abstract Reasoning" },
+      { id: "statistics_research", label: "Statistics" },
+      { id: "math", label: "Mathematics" },
+      { id: "science", label: "Science" },
+    ];
+  }
+  if (uni === "ust" || uni === "ustet") {
+    return [
+      { id: "abstract_reasoning", label: "Mental Ability" },
+      { id: "language_english", label: "Language Proficiency" },
+      { id: "math", label: "Mathematics" },
+      { id: "science", label: "Science" },
     ];
   }
   if (uni === "bu" || uni === "bucet") {
@@ -550,12 +375,20 @@ export function getDefaultItemCounts(uniId: string): Record<string, number> {
   }
   if (uni === "dlsu" || uni === "dcat") {
     return {
-      math: 50,
-      statistics_research: 40,
-      science: 45,
-      language_english: 50,
-      reading_english: 30,
-      abstract_reasoning: 40,
+      abstract_reasoning: 30,
+      language_english: 40,
+      reading_english: 40,
+      statistics_research: 45,
+      math: 45,
+      science: 50,
+    };
+  }
+  if (uni === "ust" || uni === "ustet") {
+    return {
+      abstract_reasoning: 60,
+      language_english: 80,
+      math: 60,
+      science: 80,
     };
   }
   if (uni === "bu" || uni === "bucet") {
@@ -599,111 +432,7 @@ const SAMPLE_PROMPT = `Generate 20 UPCAT-level Language Proficiency (English) qu
   }
 ]
 
-Subject values: language_english | language_filipino | math | science | reading_english | reading_filipino
-Topic values (language_english): vocabulary_and_analogy | sentence_sequencing | sentence_completion | identifying_error | idiomatic_expression | related_pair_of_words | correct_word_usage`;
-
-// ─── Topic Selector ───────────────────────────────────────────────────────────
-
-function TopicSelector({
-  subjectId,
-  selectedTopics,
-  onChange,
-  disabled,
-}: {
-  subjectId: SubjectId;
-  selectedTopics: string[];
-  onChange: (topics: string[]) => void;
-  disabled: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const groups = TOPIC_GROUPS[subjectId] ?? [];
-  if (groups.length === 0) return null;
-
-  const allOptions = groups.flatMap((g) => g.options);
-  const isAllSelected = selectedTopics.length === 0 || selectedTopics.includes(ALL_TOPICS_VALUE);
-
-  const toggleAll = () => onChange([ALL_TOPICS_VALUE]);
-
-  const toggleTopic = (value: string) => {
-    if (isAllSelected) {
-      onChange([value]);
-      return;
-    }
-    if (selectedTopics.includes(value)) {
-      const next = selectedTopics.filter((t) => t !== value);
-      onChange(next.length === 0 ? [ALL_TOPICS_VALUE] : next);
-    } else {
-      const next = [...selectedTopics.filter((t) => t !== ALL_TOPICS_VALUE), value];
-      onChange(next.length === allOptions.length ? [ALL_TOPICS_VALUE] : next);
-    }
-  };
-
-  const displayLabel = isAllSelected
-    ? "All Topics"
-    : selectedTopics.length === 1
-    ? allOptions.find((o) => o.value === selectedTopics[0])?.label ?? "1 topic"
-    : `${selectedTopics.length} topics selected`;
-
-  return (
-    <div className="mt-2">
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          "flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors",
-          disabled && "opacity-40 cursor-not-allowed"
-        )}
-      >
-        <BookOpen className="h-3.5 w-3.5" />
-        <span>{displayLabel}</span>
-        {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-      </button>
-
-      {open && !disabled && (
-        <div className="mt-3 pl-1 space-y-4 border-l-2 border-border ml-1 pl-3">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id={`${subjectId}-all`}
-              checked={isAllSelected}
-              onCheckedChange={toggleAll}
-            />
-            <Label htmlFor={`${subjectId}-all`} className="text-sm font-semibold cursor-pointer">
-              Select All Topics
-            </Label>
-          </div>
-
-          {groups.map((group) => (
-            <div key={group.label} className="space-y-2">
-              {groups.length > 1 && (
-                <p className="text-xs uppercase tracking-wider font-semibold text-muted-foreground">
-                  {group.label}
-                </p>
-              )}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
-                {group.options.map((opt) => (
-                  <div key={opt.value} className="flex items-center gap-2">
-                    <Checkbox
-                      id={`${subjectId}-${opt.value}`}
-                      checked={!isAllSelected && selectedTopics.includes(opt.value)}
-                      onCheckedChange={() => toggleTopic(opt.value)}
-                    />
-                    <Label
-                      htmlFor={`${subjectId}-${opt.value}`}
-                      className="text-xs cursor-pointer leading-tight"
-                    >
-                      {opt.label}
-                    </Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+Subject values: language_english | language_filipino | math | science | reading_english | reading_filipino`;
 
 // ─── Prompt Generator Panel ───────────────────────────────────────────────────
 
@@ -729,9 +458,6 @@ function PromptGeneratorPanel({
     reading_english: 40,
     reading_filipino: 40,
   });
-  const [genSelectedTopics, setGenSelectedTopics] = useState<Record<string, string[]>>(
-    AVAILABLE_SUBJECTS.reduce((acc, s) => ({ ...acc, [s.id]: [ALL_TOPICS_VALUE] }), {})
-  );
   const [generatedPrompt, setGeneratedPrompt] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
   const [pasteText, setPasteText] = useState("");
@@ -830,29 +556,9 @@ function PromptGeneratorPanel({
 
     for (const subject of selected) {
       const count = genItemCounts[subject.id] || 10;
-      const topics = genSelectedTopics[subject.id] ?? [ALL_TOPICS_VALUE];
-      const isAll = topics.length === 0 || topics.includes(ALL_TOPICS_VALUE);
-      const allTopicOptions = (TOPIC_GROUPS[subject.id] ?? []).flatMap((g) => g.options);
-      const specificTopics = isAll ? allTopicOptions.map((t) => t.value) : topics;
-      const topicLabels = specificTopics.map((t) => allTopicOptions.find((o) => o.value === t)?.label || t);
 
       parts.push(`--- ${subject.label} ---`);
       parts.push(`Generate exactly ${count} questions for ${subject.label}.`);
-
-      if (isAll && topicLabels.length > 0) {
-        const perTopic = Math.floor(count / topicLabels.length);
-        const remainder = count % topicLabels.length;
-        parts.push("");
-        parts.push("DISTRIBUTE questions evenly across these topics:");
-        topicLabels.forEach((label, i) => {
-          const topicCount = i < remainder ? perTopic + 1 : perTopic;
-          parts.push(`  - ${label}: ${topicCount} questions`);
-        });
-        parts.push("");
-        parts.push("When 'All Topics' is selected, spread questions equally across the available topics so each topic gets fair representation.");
-      } else if (!isAll && topicLabels.length > 0) {
-        parts.push(`Focus ONLY on these topics: ${topicLabels.join(", ")}.`);
-      }
 
       if (subject.id === "reading_english" || subject.id === "reading_filipino") {
         const lang = subject.id === "reading_english" ? "English" : "Filipino (Tagalog/Filipino language)";
@@ -1593,10 +1299,9 @@ function PromptGeneratorPanel({
             <div className="space-y-4">
               {/* Subject selectors */}
               <div className="space-y-3">
-                <p className="text-sm font-medium">Select subjects and topics:</p>
+                <p className="text-sm font-medium">Select subjects:</p>
                 {AVAILABLE_SUBJECTS.map((subject) => {
                   const isSelected = genSelectedSubjects[subject.id];
-                  const hasTopics = (TOPIC_GROUPS[subject.id] ?? []).length > 0;
                   return (
                     <div key={subject.id} className={cn("rounded-lg border p-3", isSelected ? "bg-card" : "bg-muted/30 opacity-60")}>
                       <div className="flex items-center justify-between">
@@ -1626,16 +1331,6 @@ function PromptGeneratorPanel({
                           <span className="text-sm text-muted-foreground">items</span>
                         </div>
                       </div>
-                      {hasTopics && isSelected && (
-                        <TopicSelector
-                          subjectId={subject.id}
-                          selectedTopics={genSelectedTopics[subject.id] ?? [ALL_TOPICS_VALUE]}
-                          onChange={(topics) =>
-                            setGenSelectedTopics((prev) => ({ ...prev, [subject.id]: topics }))
-                          }
-                          disabled={false}
-                        />
-                      )}
                     </div>
                   );
                 })}
@@ -1878,9 +1573,6 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
   const [itemCounts, setItemCounts] = useState<Record<string, number>>(() =>
     getDefaultItemCounts(params.id)
   );
-  const [selectedTopics, setSelectedTopics] = useState<Record<string, string[]>>(() =>
-    AVAILABLE_SUBJECTS.reduce((acc, s) => ({ ...acc, [s.id]: [ALL_TOPICS_VALUE] }), {})
-  );
 
   // Update when university changes
   useEffect(() => {
@@ -2004,9 +1696,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
       .map(([subject]) => ({
         subject: subject as SubjectId,
         count: itemCounts[subject] || 10,
-        topics: (selectedTopics[subject] ?? [ALL_TOPICS_VALUE]).includes(ALL_TOPICS_VALUE)
-          ? []
-          : selectedTopics[subject],
+        topics: [] as string[],
       }));
 
     if (subjectsToUse.length === 0) return;
@@ -2087,9 +1777,9 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                 {params.id === 'upcat' 
                   ? "University of the Philippines - (UPCAT 2028)" 
                   : params.id === 'ateneo'
-                  ? "Ateneo de Manila University - (ACET 2028)"
+                  ? "Ateneo de Manila University - (ACET 2027)"
                   : params.id === 'dlsu'
-                  ? "De La Salle University - (DCAT 2028)"
+                  ? "De La Salle University - (DCAT 2027)"
                   : params.id === 'bu' 
                   ? "Bicol University - (BUCET 2027)" 
                   : "Mock Test Configuration"}
@@ -2273,13 +1963,12 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
               <CardHeader>
                 <CardTitle>Configure Mock Test</CardTitle>
                 <CardDescription>
-                  Select subjects, choose topics, and set the number of items per subject.
+                  Select subjects and set the number of items per subject.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {universitySubjects.map((subject) => {
                   const isSelected = selectedSubjects[subject.id];
-                  const hasTopics = (TOPIC_GROUPS[subject.id] ?? []).length > 0;
                   const secsPerItem = getSecondsPerItem(subject.id, params.id);
                   const subjectStats = getBankStats(params.id, subject.id);
 
@@ -2333,24 +2022,6 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                           <span className="text-sm text-muted-foreground w-10">items</span>
                         </div>
                       </div>
-
-                      {hasTopics && (
-                        <TopicSelector
-                          subjectId={subject.id}
-                          selectedTopics={selectedTopics[subject.id] ?? [ALL_TOPICS_VALUE]}
-                          onChange={(topics) =>
-                            setSelectedTopics((prev) => ({ ...prev, [subject.id]: topics }))
-                          }
-                          disabled={!isSelected}
-                        />
-                      )}
-
-                      {!hasTopics && subject.id.startsWith("reading") && (
-                        <p className="mt-2 text-xs text-muted-foreground flex items-center gap-1.5">
-                          <BookOpen className="h-3.5 w-3.5" />
-                          Various passages with 2–5 questions each. No topic filter needed.
-                        </p>
-                      )}
                     </div>
                   );
                 })}
@@ -2524,8 +2195,8 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
         universityId={params.id}
         universityName={
           params.id === 'upcat' ? "University of the Philippines - (UPCAT 2028)" :
-          params.id === 'ateneo' ? "Ateneo de Manila University - (ACET 2028)" :
-          params.id === 'dlsu' ? "De La Salle University - (DCAT 2028)" :
+          params.id === 'ateneo' ? "Ateneo de Manila University - (ACET 2027)" :
+          params.id === 'dlsu' ? "De La Salle University - (DCAT 2027)" :
           params.id === 'bu' ? "Bicol University - (BUCET 2027)" : "Entrance Exam"
         }
         currentDate={userExamDates[params.id] || ""}
