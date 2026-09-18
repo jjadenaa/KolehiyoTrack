@@ -11,6 +11,8 @@ import {
   notifyAIAutoSwitched,
   getStoredGroqModel,
   saveStoredGroqModel,
+  parseCloudflareCredentials,
+  saveStoredCloudflareAccountId,
   GROQ_CANDIDATE_MODELS,
 } from "./geminiKey";
 import { saveUserAISettingsToAccount } from "./userAISettings";
@@ -164,26 +166,185 @@ export async function testAIProviderConnection(
     };
   }
 
-  // Test OpenAI-compatible endpoints (OpenAI, OpenRouter, DeepSeek)
-  try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${cleanKey}`,
-    };
+  // Test Cohere (Command R) endpoint
+  if (provider === "cohere") {
+    try {
+      const res = await fetch("https://api.cohere.com/compatibility/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${cleanKey}`,
+        },
+        body: JSON.stringify({
+          model: "command-r",
+          messages: [{ role: "user", content: "Respond with 'OK'." }],
+          max_tokens: 10,
+          temperature: 0.1,
+        }),
+      });
 
-    if (provider === "openrouter") {
-      headers["HTTP-Referer"] = typeof window !== "undefined" ? window.location.origin : "https://upcat.app";
-      headers["X-Title"] = "Sulyap CET Reviewer";
+      const responseText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch {}
+
+      if (res.ok) {
+        saveUserAISettingsToAccount(null, {
+          providerKey: { provider: "cohere", key: cleanKey },
+        }).catch(() => {});
+
+        return {
+          success: true,
+          message: "Connected successfully to Cohere (Command R)! 1,000 free monthly requests active.",
+        };
+      }
+
+      if (res.status === 401) {
+        return {
+          success: false,
+          message: "Invalid or unauthorized API key for Cohere. Please check your key at dashboard.cohere.com/api-keys.",
+        };
+      }
+
+      const errDetail = data?.message || data?.error?.message || `Server responded with status ${res.status}`;
+      return { success: false, message: `Cohere error (${res.status}): ${errDetail}` };
+    } catch (err: any) {
+      return { success: false, message: `Failed to connect to Cohere: ${err?.message || "Network error"}` };
+    }
+  }
+
+  // Test Cloudflare Workers AI endpoint
+  if (provider === "cloudflare") {
+    const creds = parseCloudflareCredentials(cleanKey);
+    if (!creds.accountId || !creds.apiToken) {
+      return {
+        success: false,
+        message: "Please provide both your Cloudflare Account ID and API Token in format ACCOUNT_ID:API_TOKEN, or enter your Account ID in the field above.",
+      };
     }
 
-    const res = await fetch(meta.endpoint, {
+    try {
+      // 1. Test Workers AI chat completions
+      const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${creds.accountId}/ai/v1/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${creds.apiToken}`,
+        },
+        body: JSON.stringify({
+          model: "@cf/meta/llama-3.1-8b-instruct",
+          messages: [{ role: "user", content: "Respond with 'OK'." }],
+          max_tokens: 10,
+          temperature: 0.1,
+        }),
+      });
+
+      const responseText = await res.text();
+      let data: any = {};
+      try {
+        data = JSON.parse(responseText);
+      } catch {}
+
+      if (res.ok) {
+        saveStoredCloudflareAccountId(creds.accountId);
+        saveUserAISettingsToAccount(null, {
+          providerKey: { provider: "cloudflare", key: `${creds.accountId}:${creds.apiToken}` },
+          cloudflareAccountId: creds.accountId,
+        }).catch(() => {});
+
+        return {
+          success: true,
+          message: "Connected successfully to Cloudflare Workers AI (Llama 3.1 8B)! 10,000 free daily Neurons active.",
+        };
+      }
+
+      // 2. Direct run fallback test
+      if (res.status === 404) {
+        const directRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${creds.accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${creds.apiToken}`,
+          },
+          body: JSON.stringify({
+            messages: [{ role: "user", content: "Respond with 'OK'." }],
+            max_tokens: 10,
+          }),
+        });
+
+        if (directRes.ok) {
+          saveStoredCloudflareAccountId(creds.accountId);
+          saveUserAISettingsToAccount(null, {
+            providerKey: { provider: "cloudflare", key: `${creds.accountId}:${creds.apiToken}` },
+            cloudflareAccountId: creds.accountId,
+          }).catch(() => {});
+
+          return {
+            success: true,
+            message: "Connected successfully to Cloudflare Workers AI (Llama 3.1 8B)!",
+          };
+        }
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        return {
+          success: false,
+          message: "Invalid or unauthorized Cloudflare API Token. Ensure your token has 'Workers AI Read' permission.",
+        };
+      }
+
+      const errDetail = data?.errors?.[0]?.message || data?.error?.message || data?.message || `Status ${res.status}`;
+      return { success: false, message: `Cloudflare error (${res.status}): ${errDetail}` };
+    } catch (err: any) {
+      return { success: false, message: `Failed to connect to Cloudflare Workers AI: ${err?.message || "Network error"}` };
+    }
+  }
+
+  return { success: false, message: "Unknown AI provider." };
+}
+
+/**
+ * Executes a request against Cloudflare Workers AI using the OpenAI-compatible v1 endpoint
+ * or direct /ai/run endpoint.
+ */
+async function callCloudflareWorkersAI(
+  rawCredentials: string,
+  params: {
+    systemInstruction?: string;
+    messages: Array<{ role: string; content: string }>;
+    temperature?: number;
+    max_tokens?: number;
+    jsonMode?: boolean;
+  }
+): Promise<string> {
+  const creds = parseCloudflareCredentials(rawCredentials);
+  if (!creds.accountId || !creds.apiToken) {
+    throw new Error("Cloudflare Account ID or API Token missing. Please check your Cloudflare settings.");
+  }
+
+  const payloadMessages: Array<{ role: string; content: string }> = [];
+  if (params.systemInstruction) {
+    payloadMessages.push({ role: "system", content: params.systemInstruction });
+  }
+  for (const m of params.messages) {
+    payloadMessages.push({ role: m.role, content: m.content });
+  }
+
+  // 1. Try OpenAI-compatible chat completions endpoint
+  try {
+    const res = await fetch(`https://api.cloudflare.com/client/v4/accounts/${creds.accountId}/ai/v1/chat/completions`, {
       method: "POST",
-      headers,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${creds.apiToken}`,
+      },
       body: JSON.stringify({
-        model: meta.defaultModel,
-        messages: [{ role: "user", content: "Respond with 'OK'." }],
-        max_tokens: 10,
-        temperature: 0.1,
+        model: "@cf/meta/llama-3.1-8b-instruct",
+        messages: payloadMessages,
+        temperature: params.temperature ?? 0.5,
+        max_tokens: params.max_tokens ?? 800,
+        ...(params.jsonMode ? { response_format: { type: "json_object" } } : {}),
       }),
     });
 
@@ -194,34 +355,43 @@ export async function testAIProviderConnection(
     } catch {}
 
     if (res.ok) {
-      saveUserAISettingsToAccount(null, {
-        providerKey: { provider, key: cleanKey },
-      }).catch(() => {});
-
-      return {
-        success: true,
-        message: `Connected successfully to ${meta.name} (${meta.defaultModel})!`,
-      };
+      const content = data?.choices?.[0]?.message?.content;
+      if (content) return content;
     }
-
-    const errDetail = data?.error?.message || data?.message || `Server responded with status ${res.status}`;
-    let friendly = `Connection error (${res.status}): ${errDetail}`;
-    if (res.status === 401) {
-      friendly = `Invalid or unauthorized API key for ${meta.name}. Please check your key.`;
-    } else if (res.status === 429) {
-      friendly = `Rate limit reached or credits exhausted on ${meta.name}. Please check your account quota.`;
-    }
-    return { success: false, message: friendly };
-  } catch (err: any) {
-    return {
-      success: false,
-      message: `Failed to connect to ${meta.name}: ${err?.message || "Network error"}`,
-    };
+  } catch (err) {
+    console.warn("[Cloudflare] Chat completions endpoint error, trying direct runner:", err);
   }
+
+  // 2. Direct run endpoint fallback
+  const runRes = await fetch(`https://api.cloudflare.com/client/v4/accounts/${creds.accountId}/ai/run/@cf/meta/llama-3.1-8b-instruct`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${creds.apiToken}`,
+    },
+    body: JSON.stringify({
+      messages: payloadMessages,
+      max_tokens: params.max_tokens ?? 800,
+    }),
+  });
+
+  const runText = await runRes.text();
+  let runData: any = {};
+  try {
+    runData = JSON.parse(runText);
+  } catch {}
+
+  if (runRes.ok) {
+    const response = runData?.result?.response || runData?.response;
+    if (response) return response;
+  }
+
+  const errDetail = runData?.errors?.[0]?.message || runData?.messages?.[0] || `Status ${runRes.status}`;
+  throw new Error(`Cloudflare Workers AI Error: ${errDetail}`);
 }
 
 /**
- * Executes a request against an OpenAI-compatible API provider (Groq, OpenAI, OpenRouter, DeepSeek)
+ * Executes a request against an OpenAI-compatible API provider (Groq, Cohere)
  */
 async function callOpenAICompatibleProvider(
   provider: AIProvider,
@@ -230,6 +400,7 @@ async function callOpenAICompatibleProvider(
     systemInstruction?: string;
     messages: Array<{ role: string; content: string }>;
     temperature?: number;
+    max_tokens?: number;
     jsonMode?: boolean;
   }
 ): Promise<string> {
@@ -241,11 +412,6 @@ async function callOpenAICompatibleProvider(
     "Content-Type": "application/json",
     Authorization: `Bearer ${cleanKey}`,
   };
-
-  if (provider === "openrouter") {
-    headers["HTTP-Referer"] = typeof window !== "undefined" ? window.location.origin : "https://upcat.app";
-    headers["X-Title"] = "Sulyap CET Reviewer";
-  }
 
   const payloadMessages: Array<{ role: string; content: string }> = [];
   if (params.systemInstruction) {
@@ -265,6 +431,7 @@ async function callOpenAICompatibleProvider(
       model: modelName,
       messages: payloadMessages,
       temperature: params.temperature ?? 0.7,
+      max_tokens: params.max_tokens ?? 800,
     };
 
     if (params.jsonMode && provider !== "groq") {
@@ -414,7 +581,32 @@ async function executeSingleChat(
   message: string,
   history: Array<{ role: string; text: string }>
 ): Promise<string> {
-  // Non-Gemini provider (Groq, OpenAI, OpenRouter, DeepSeek)
+  // Cloudflare Workers AI provider
+  if (provider === "cloudflare") {
+    if (!key) {
+      throw new Error(`No credentials configured for Cloudflare Workers AI.`);
+    }
+
+    const systemInstruction = `You are "Isko AI", an ultra-fast, accurate Philippine College Entrance Test (UPCAT, ACET, DCAT, USTET, PLMAT, BUCET) tutor.
+Be concise, direct, and fast to read (150-250 words max). Skip pleasantries and conversational filler. Directly provide the solution, formulas in KaTeX ($...$ or $$...$$), and 30-second CET exam shortcut tips. Ensure 100% accuracy.`;
+
+    const messages = [
+      ...history.slice(-6).map((h) => ({
+        role: h.role === "assistant" || h.role === "model" ? "assistant" : "user",
+        content: h.text,
+      })),
+      { role: "user", content: message },
+    ];
+
+    return await callCloudflareWorkersAI(key, {
+      systemInstruction,
+      messages,
+      temperature: 0.4,
+      max_tokens: 600,
+    });
+  }
+
+  // Non-Gemini OpenAI-compatible providers (Groq, Cohere)
   if (provider !== "gemini") {
     if (!key) {
       throw new Error(`No API key configured for ${AI_PROVIDERS[provider].name}.`);
@@ -587,7 +779,60 @@ async function executeSingleExplain(
   keyRuleOrShortcut: string;
   fullTutorResponse: string;
 }> {
-  // Non-Gemini provider (Groq, OpenAI, OpenRouter, DeepSeek)
+  // Cloudflare Workers AI provider
+  if (provider === "cloudflare") {
+    if (!key) {
+      throw new Error(`No credentials configured for Cloudflare Workers AI.`);
+    }
+
+    const prompt = `You are an expert CET (UPCAT, ACET, DCAT, USTET) tutor.
+Analyze this exam question, diagnose the error, and provide the rapid solution in Filipino-English context.
+Format all mathematical expressions in KaTeX ($...$ or $$...$$).
+
+QUESTION:
+${payload.questionText}
+
+CHOICES:
+${payload.choices.map((c) => `${c.id}. ${c.text}`).join("\n")}
+
+CORRECT ANSWER: Choice ${payload.correctAnswer}
+STUDENT'S ANSWER: ${payload.userAnswer ? `Choice ${payload.userAnswer}` : "Skipped/Blank"}
+${payload.userQuery ? `STUDENT'S QUESTION: "${payload.userQuery}"` : ""}
+
+You MUST return valid raw JSON matching this format:
+{
+  "errorAnalysis": "Specific reason why the student's answer was incorrect and common test trap",
+  "fastSolution": "Clean, step-by-step fastest method to find the correct answer with KaTeX $...$",
+  "keyRuleOrShortcut": "One golden memory rule, formula, or exam shortcut",
+  "fullTutorResponse": "Encouraging, comprehensive tutor explanation with KaTeX formulas"
+}`;
+
+    const text = await callCloudflareWorkersAI(key, {
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+      jsonMode: true,
+    });
+
+    try {
+      const cleanJson = text.replace(/^```json\s*/i, "").replace(/^```\s*/i, "").replace(/\s*```$/i, "").trim();
+      const parsed = JSON.parse(cleanJson);
+      return {
+        errorAnalysis: parsed.errorAnalysis || "Analysis of the option selected.",
+        fastSolution: parsed.fastSolution || "Step-by-step solution.",
+        keyRuleOrShortcut: parsed.keyRuleOrShortcut || "Review the core concept.",
+        fullTutorResponse: parsed.fullTutorResponse || text,
+      };
+    } catch {
+      return {
+        errorAnalysis: "Option analysis generated.",
+        fastSolution: text,
+        keyRuleOrShortcut: "Always verify question conditions.",
+        fullTutorResponse: text,
+      };
+    }
+  }
+
+  // Non-Gemini OpenAI-compatible providers (Groq, Cohere)
   if (provider !== "gemini") {
     if (!key) {
       throw new Error(`No API key configured for ${AI_PROVIDERS[provider].name}.`);

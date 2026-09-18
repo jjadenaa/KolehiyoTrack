@@ -8,7 +8,7 @@ import { formatTime } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
-import { markQuestionsUsed, getPassageId } from "@/lib/questionBank";
+import { markQuestionsUsed, recordPastQuizQuestions, saveLocalSession, getPassageId } from "@/lib/questionBank";
 import { recordSessionMistakes } from "@/lib/mistakeDiary";
 import { ChevronLeft, ChevronRight, XCircle } from "lucide-react";
 import { SmartText } from "@/components/SmartText";
@@ -172,6 +172,7 @@ export default function TestPage() {
     });
 
     markQuestionsUsed(questions.map((q) => q.id), universityId);
+    recordPastQuizQuestions(questions, universityId);
     const upcatScore = universityId === "upcat" ? correctCount - 0.25 * wrongCount : correctCount;
     const sessionData = {
       answers: sessionAnswers,
@@ -190,6 +191,13 @@ export default function TestPage() {
       console.error("Failed to catalog mistakes into diary:", mistakeErr);
     }
 
+    const localSession = {
+      id: `local_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      ...sessionData,
+      createdAt: new Date().toISOString(),
+    };
+    saveLocalSession(universityId, localSession);
+
     if (user) {
       try {
         const saved = await saveSession(user.uid, universityId, sessionData);
@@ -202,10 +210,10 @@ export default function TestPage() {
         }
       } catch (err) {
         console.error("Failed to save session to Firestore:", err);
-        setLastSession({ id: "local", ...sessionData, createdAt: new Date().toISOString() });
+        setLastSession(localSession);
       }
     } else {
-      setLastSession({ id: "local", ...sessionData, createdAt: new Date().toISOString() });
+      setLastSession(localSession);
     }
     setSubmitting(false);
     setLocation("/results");

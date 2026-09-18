@@ -9,11 +9,30 @@ export interface ChangelogItem {
 }
 
 // 1. Change your global version number here
-export const CURRENT_VERSION = "v0.3.2 Beta";
+export const CURRENT_VERSION = "v0.3.4";
 
 // 2. Add or update release notes here (newest first)
 export const CHANGELOG_DATA: ChangelogItem[] = [
+  {
+    version: "v0.3.4",
+    date: "September 18, 2026",
+    changes: [
+      {
+        title: "Admission Calendars, Smart Filter Expansion and Bug Fixes",
+        description: "Expanded the admission calendar with eight new universities and introduced compact, account-persisted search and filter controls for university types, regions, leagues, and application months and fixed several bugs."
+
+      },
+      {
+        title: "Added ACET Notebook Support",
+        description: "You may now use Gemini Notebook to generate questions for ACET."
+      },
        {
+        title: "UI Improvemnt",
+        description: "Added announcement tabs and filter elements to remove unessecary clusters."
+      }
+    ]
+  },
+  {
     version: "v0.3.3",
     date: "September 11, 2026",
     changes: [

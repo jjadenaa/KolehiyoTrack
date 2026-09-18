@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { SmartText } from "@/components/SmartText";
 import { DiagramRenderer } from "@/components/DiagramRenderer";
 import { AskAIQuestionTutor } from "@/components/AskAIQuestionTutor";
+import { banQuestion, unbanQuestion, getBannedIds } from "@/lib/questionBank";
 
 export default function ReviewPage() {
   const [, params] = useRoute("/review/:sessionId");
@@ -25,6 +26,7 @@ export default function ReviewPage() {
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [filter, setFilter] = useState<"all" | "wrong" | "correct" | "blank">("all");
+  const [bannedIds, setBannedIds] = useState<Set<string>>(() => getBannedIds(universityId || "upcat"));
 
   useEffect(() => {
     if (!sessionId || authLoading || !user) return;
@@ -166,9 +168,38 @@ export default function ReviewPage() {
                     <span className="font-bold text-muted-foreground text-sm">#{origIndex + 1}</span>
                     <Badge variant="outline" className="text-xs">{SUBJECT_LABELS[answer.subject] || answer.subject}</Badge>
                   </div>
-                  <Badge variant={answer.isCorrect ? "default" : answer.isBlank ? "secondary" : "destructive"} className="text-xs">
-                    {answer.isCorrect ? "✓ Correct" : answer.isBlank ? "– Blank" : "✗ Wrong"}
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className={cn(
+                        "h-7 text-xs gap-1 cursor-pointer hover:bg-red-500/10",
+                        bannedIds.has(answer.questionId)
+                          ? "text-red-600 dark:text-red-400 font-bold"
+                          : "text-muted-foreground hover:text-red-600"
+                      )}
+                      onClick={() => {
+                        const isBanned = bannedIds.has(answer.questionId);
+                        if (isBanned) {
+                          unbanQuestion(answer.questionId, universityId || "upcat");
+                          const updated = new Set(bannedIds);
+                          updated.delete(answer.questionId);
+                          setBannedIds(updated);
+                        } else {
+                          banQuestion(answer.questionId, universityId || "upcat");
+                          const updated = new Set(bannedIds);
+                          updated.add(answer.questionId);
+                          setBannedIds(updated);
+                        }
+                      }}
+                    >
+                      <span className="text-sm">🚫</span>
+                      <span>{bannedIds.has(answer.questionId) ? "Banned" : "Ban"}</span>
+                    </Button>
+                    <Badge variant={answer.isCorrect ? "default" : answer.isBlank ? "secondary" : "destructive"} className="text-xs">
+                      {answer.isCorrect ? "✓ Correct" : answer.isBlank ? "– Blank" : "✗ Wrong"}
+                    </Badge>
+                  </div>
                 </div>
                 <CardContent className="p-5 space-y-4">
                   {/* Question text */}

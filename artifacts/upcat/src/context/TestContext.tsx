@@ -19,6 +19,8 @@ import {
   setBankUpdatedAt,
   getUsedIds,
   saveUsedIds,
+  getLocalSessions,
+  recordPastQuizQuestions,
   BankQuestion
 } from "@/lib/questionBank";
 
@@ -138,8 +140,15 @@ export function TestProvider({ children }: { children: ReactNode }) {
   // 2. REAL-TIME PAST SESSIONS LISTENER
   useEffect(() => {
     if (!user || !universityId) {
-      setPastSessions([]);
+      const local = getLocalSessions(universityId || "upcat");
+      setPastSessions(local);
       setSessionsLoaded(true);
+      if (local.length > 0) {
+        const qList = local.flatMap((s: Session) =>
+          (s.answers || []).map((a) => ({ id: a.questionId, text: a.questionText, subject: a.subject }))
+        );
+        recordPastQuizQuestions(qList, universityId || "upcat");
+      }
       return;
     }
 
@@ -185,6 +194,14 @@ export function TestProvider({ children }: { children: ReactNode }) {
 
       setPastSessions(loadedSessions);
       setSessionsLoaded(true);
+
+      // Index all questions from past sessions into past quiz memory
+      if (loadedSessions.length > 0) {
+        const qList = loadedSessions.flatMap((s) =>
+          (s.answers || []).map((a) => ({ id: a.questionId, text: a.questionText, subject: a.subject }))
+        );
+        recordPastQuizQuestions(qList, universityId);
+      }
     }, (error) => {
       console.error("[Realtime Sessions] Error listening to past sessions:", error);
       setSessionsLoaded(true);

@@ -1,9 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
 import { Layout } from "@/components/layout";
+import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar, Trash2, Edit3, ExternalLink, BrainCircuit, Sparkles, Layers, CalendarCheck } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Clock, GraduationCap, Plus, ArrowRight, AlertTriangle, Flame, Calendar, Trash2, Edit3, ExternalLink, BrainCircuit, Sparkles, Layers, CalendarCheck, Bell, BellRing, Search, Filter, RotateCcw, X, SlidersHorizontal, CheckCircle2 } from "lucide-react";
 import { useUpcatCountdown } from "@/hooks/useCountdown";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -17,9 +19,14 @@ import {
   saveSingleExamDate,
   calculateDaysRemaining,
   formatCustomDateDisplay,
+  subscribeUserCalendarFilters,
+  saveUserCalendarFilters,
+  DEFAULT_CALENDAR_FILTERS,
+  CalendarFilters,
 } from "@/lib/userUniversities";
 import { listSessions } from "@/lib/firestoreSessions";
 import { getLocalMistakes } from "@/lib/mistakeDiary";
+import { APPLICATION_TIMELINES, ApplicationTimeline } from "@/lib/applicationTimelines";
 import { CalendarWidget } from "@/components/CalendarWidget";
 import { AIChatbox } from "@/components/AIChatbox";
 import { UniversityLogo } from "@/components/UniversityLogo";
@@ -32,7 +39,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 
 const UNIVERSITIES = [
   { 
@@ -67,119 +73,9 @@ const UNIVERSITIES = [
     id: 'bu',
     name: 'Bicol University - (BUCET 2027)',
     date: 'Aug 20 – Dec 6, 2026',
-    applyUrl: 'https://ibu.bicol-u.edu.ph/sign-up?fbclid=IwY2xjawTQPAJwZG9mAWV4dG4DYWVtAjEwAGJyaWQRMUEzSHpab2JIZ3hWMUhXaWRzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeTjS04h49KzBzXXXEaiX2Da6cZA9L2zAs1TctSssit2Uj4g5iW7snT69yb04_aem_kbbDwP7cLHCmOLDVE3__dA',
+    applyUrl: 'https://ibu.bicol-u.edu.ph/',
     description: ''
   }
-];
-
-interface ApplicationTimeline {
-  id: string;
-  fullName: string;
-  openStr: string;
-  closeStr: string;
-  openDate: Date;
-  closeDate?: Date;
-  applyUrl: string;
-}
-
-const APPLICATION_TIMELINES: ApplicationTimeline[] = [
-  {
-    id: "admu",
-    fullName: "Ateneo de Manila University",
-    openStr: "June 22, 2026",
-    closeStr: "August 24, 2026",
-    openDate: new Date("2026-06-22T00:00:00"),
-    closeDate: new Date("2026-08-24T23:59:59"),
-    applyUrl: "https://ateneo.admissions.ph/",
-  },
-  {
-    id: "dlsu",
-    fullName: "De La Salle University",
-    openStr: "July 15, 2026",
-    closeStr: "September 30, 2026",
-    openDate: new Date("2026-07-15T00:00:00"),
-    closeDate: new Date("2026-09-30T23:59:59"),
-    applyUrl: "https://applyarchershub.dlsu.edu.ph/ApplicationLandingPage/index/DLSU",
-  },
-  {
-    id: "bu",
-    fullName: "Bicol University",
-    openStr: "July 23, 2026",
-    closeStr: "October 30, 2026",
-    openDate: new Date("2026-07-23T00:00:00"),
-    closeDate: new Date("2026-10-30T23:59:59"),
-    applyUrl: "https://ibu.bicol-u.edu.ph/sign-up?fbclid=IwY2xjawTQPAJwZG9mAWV4dG4DYWVtAjEwAGJyaWQRMUEzSHpab2JIZ3hWMUhXaWRzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeTjS04h49KzBzXXXEaiX2Da6cZA9L2zAs1TctSssit2Uj4g5iW7snT69yb04_aem_kbbDwP7cLHCmOLDVE3__dA",
-  },
-  {
-    id: "nu",
-    fullName: "National University",
-    openStr: "August 8, 2026",
-    closeStr: "TBA",
-    openDate: new Date("2026-08-08T00:00:00"),
-    applyUrl: "https://onlineapp.national-u.edu.ph/quest/register.php?fbclid=IwY2xjawTlVvlwZG9mAWV4dG4DYWVtAjEwAGJyaWQRMWoxM0RBazZCMm8xT0JVcHdzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEeFhNu_FJ9xs6Q1LrXWWkyzbilyC80NGxIL3HkcE_3vVKMn387UZJg0hUcp3Q_aem_o2XOUjub7T4nVo5RD6JESg",
-  },
-  {
-    id: "dost",
-    fullName: "DOST - SEI Scholarship",
-    openStr: "August 17, 2026",
-    closeStr: "September 17, 2026",
-    openDate: new Date("2026-08-17T00:00:00"),
-    closeDate: new Date("2026-09-17T23:59:59"),
-    applyUrl: "https://www.sei.dost.gov.ph/",
-  },
-  {
-    id: "ust",
-    fullName: "University of Santo Tomas",
-    openStr: "August 8, 2026",
-    closeStr: "January 8, 2027",
-    openDate: new Date("2026-08-08T00:00:00"),
-    closeDate: new Date("2027-01-08T23:59:59"),
-    applyUrl: "https://ustet.ust.edu.ph/home?id=blue",
-  },
-  {
-    id: "bulsu",
-    fullName: "Bulacan State University",
-    openStr: "August 25, 2026",
-    closeStr: "November 27, 2026",
-    openDate: new Date("2026-08-25T00:00:00"),
-    closeDate: new Date("2026-11-27T23:59:59"),
-    applyUrl: "https://bulsu.edu.ph/",
-  },
-  {
-    id: "feu",
-    fullName: "Far Eastern University",
-    openStr: "September 5, 2026",
-    closeStr: "TBA",
-    openDate: new Date("2026-09-05T00:00:00"),
-    applyUrl: "https://www.feu.edu.ph/",
-  },
-  {
-    id: "naap",
-    fullName: "National Aviation Academy of the Philippines",
-    openStr: "September 1, 2026",
-    closeStr: "October 31, 2026",
-    openDate: new Date("2026-09-01T00:00:00"),
-    closeDate: new Date("2026-10-31T23:59:59"),
-    applyUrl: "https://caap.gov.ph/",
-  },
-  {
-    id: "plm",
-    fullName: "Pamantasan ng Lungsod ng Maynila",
-    openStr: "August 14, 2026",
-    closeStr: "September 30, 2026",
-    openDate: new Date("2026-08-14T00:00:00"),
-    closeDate: new Date("2026-09-30T23:59:59"),
-    applyUrl: "https://plm.edu.ph/",
-  },
-  {
-    id: "pnu",
-    fullName: "Philippine Normal University",
-    openStr: "August 3, 2026",
-    closeStr: "October 23, 2026",
-    openDate: new Date("2026-08-03T00:00:00"),
-    closeDate: new Date("2026-10-23T23:59:59"),
-    applyUrl: "https://pwebss.pnu.edu.ph/pnu/applicants/?fbclid=IwY2xjawTlV-twZG9mAWV4dG4DYWVtAjEwAGJyaWQRMWoxM0RBazZCMm8xT0JVcHdzcnRjBmFwcF9pZBAyMjIwMzkxNzg4MjAwODkyAAEegbRVGL9Tuc7bBQDL8pLf1MNGPACDTtQzlME6Pxcu9ZPT0j0AnQfpExeF2J8_aem_kRm80K4K7C0e6bLvpMQ6ew",
-  },
 ];
 
 export default function Dashboard() {
@@ -203,6 +99,145 @@ export default function Dashboard() {
   // State for date editing dialog
   const [editingDateUni, setEditingDateUni] = useState<{ id: string; name: string; defaultDate: string } | null>(null);
 
+  // Notification States
+  const [notifPermission, setNotifPermission] = useState<string>(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
+    return Notification.permission;
+  });
+  const [enableStudyReminders, setEnableStudyReminders] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("kt_notif_study") !== "false";
+  });
+  const [enableMissionAlerts, setEnableMissionAlerts] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("kt_notif_missions") !== "false";
+  });
+  const [enableCountdownAlerts, setEnableCountdownAlerts] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("kt_notif_countdown") !== "false";
+  });
+
+  const requestNotifPermission = async () => {
+    if (!("Notification" in window)) {
+      toast({
+        title: "Notifications Unsupported",
+        description: "Your browser does not support Web Notifications.",
+        variant: "destructive"
+      });
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setNotifPermission(permission);
+      if (permission === "granted") {
+        toast({
+          title: "Notifications Enabled! 🔔",
+          description: "You will now receive study reminders and countdown alerts.",
+        });
+        sendBrowserNotification(
+          "KolehiyoTrack Reminders Enabled! 🎯",
+          "Awesome! We will remind you to study, track daily missions, and count down your CET dates!"
+        );
+      } else if (permission === "denied") {
+        toast({
+          title: "Permission Denied",
+          description: "Please enable notifications in your browser settings to receive reminders.",
+          variant: "destructive"
+        });
+      }
+    } catch (err) {
+      console.error("Failed to request notification permission:", err);
+    }
+  };
+
+  const sendBrowserNotification = (title: string, body: string) => {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    try {
+      new Notification(title, {
+        body,
+        icon: `${import.meta.env.BASE_URL}logo.png`,
+      });
+    } catch (err) {
+      // Fallback to service worker showNotification if the standard constructor isn't allowed in some iframe environments
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.ready.then((reg) => {
+          reg.showNotification(title, {
+            body,
+            icon: `${import.meta.env.BASE_URL}logo.png`,
+          });
+        });
+      } else {
+        console.warn("Could not display native notification inside preview iframe constraint:", err);
+      }
+    }
+  };
+
+  const triggerTestNotification = (type: "study" | "mission" | "countdown" | "streak") => {
+    if (notifPermission !== "granted") {
+      requestNotifPermission();
+      return;
+    }
+
+    if (type === "study") {
+      sendBrowserNotification(
+        "📝 Time to study! | KolehiyoTrack",
+        "Keep your momentum up! A quick 10-question mock subtest is all it takes to keep your streak hot. 🔥"
+      );
+    } else if (type === "mission") {
+      sendBrowserNotification(
+        "🎯 Daily Missions Reset! | KolehiyoTrack",
+        "Your 5 daily missions for today are waiting! Complete them to unlock your level-up chime & confetti cascade."
+      );
+    } else if (type === "countdown") {
+      const upcatDays = upcatDaysLeft !== null ? upcatDaysLeft : 12;
+      sendBrowserNotification(
+        "⏳ CET Countdown | KolehiyoTrack",
+        `Tick-tock! Only ${upcatDays} days remaining until your UPCAT exam target. Let's make today count!`
+      );
+    } else if (type === "streak") {
+      sendBrowserNotification(
+        "🔥 Daily Streak Safe! | KolehiyoTrack",
+        `Fantastic job! Your study streak is secure. You are officially on a ${streak + 1}-day streak!`
+      );
+    }
+    toast({
+      title: "Test Alert Sent!",
+      description: "A push notification has been fired. Check your desktop or phone notification center!",
+    });
+  };
+
+  // Sync notification preferences to localStorage and trigger global window events
+  useEffect(() => {
+    localStorage.setItem("kt_notif_study", String(enableStudyReminders));
+    window.dispatchEvent(new Event("kt_notification_settings_changed"));
+  }, [enableStudyReminders]);
+
+  useEffect(() => {
+    localStorage.setItem("kt_notif_missions", String(enableMissionAlerts));
+    window.dispatchEvent(new Event("kt_notification_settings_changed"));
+  }, [enableMissionAlerts]);
+
+  useEffect(() => {
+    localStorage.setItem("kt_notif_countdown", String(enableCountdownAlerts));
+    window.dispatchEvent(new Event("kt_notification_settings_changed"));
+  }, [enableCountdownAlerts]);
+
+  // Synchronize state when changed from SettingsModal
+  useEffect(() => {
+    const handleSync = () => {
+      setEnableStudyReminders(localStorage.getItem("kt_notif_study") !== "false");
+      setEnableMissionAlerts(localStorage.getItem("kt_notif_missions") !== "false");
+      setEnableCountdownAlerts(localStorage.getItem("kt_notif_countdown") !== "false");
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setNotifPermission(Notification.permission);
+      }
+    };
+    window.addEventListener("kt_notification_settings_changed", handleSync);
+    return () => {
+      window.removeEventListener("kt_notification_settings_changed", handleSync);
+    };
+  }, []);
+
   useEffect(() => {
     return subscribeUserAddedUniversities(user, (ids) => {
       setAddedUniIds(ids);
@@ -223,10 +258,96 @@ export default function Dashboard() {
     }
   }, [filteredUniversities.length]);
 
+  const [calendarFilters, setCalendarFilters] = useState<CalendarFilters>(DEFAULT_CALENDAR_FILTERS);
+  const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
+  const [isFilterOpen, setIsFilterOpen] = useState<boolean>(false);
+
+  const activeFilterCount = useMemo(() => {
+    return [
+      calendarFilters.institutionType !== "all",
+      calendarFilters.islandGroup !== "all",
+      calendarFilters.region !== "all",
+      calendarFilters.category !== "all",
+      calendarFilters.openMonth !== "all",
+      calendarFilters.closeMonth !== "all",
+    ].filter(Boolean).length;
+  }, [calendarFilters]);
+
+  useEffect(() => {
+    return subscribeUserCalendarFilters(user, (filters) => {
+      setCalendarFilters(filters);
+    });
+  }, [user]);
+
+  const handleUpdateCalendarFilter = (key: keyof CalendarFilters, val: string) => {
+    const updated = { ...calendarFilters, [key]: val };
+    setCalendarFilters(updated);
+    saveUserCalendarFilters(user, updated);
+  };
+
+  const handleResetCalendarFilters = () => {
+    setCalendarFilters(DEFAULT_CALENDAR_FILTERS);
+    saveUserCalendarFilters(user, DEFAULT_CALENDAR_FILTERS);
+  };
+
   const visibleTimelines = APPLICATION_TIMELINES.filter((item) => {
-    if (!item.closeDate) return true;
-    const sevenDaysAfterClose = new Date(item.closeDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-    return new Date() <= sevenDaysAfterClose;
+    // Date Expiry Check (max 7 days past close date)
+    if (item.closeDate) {
+      const sevenDaysAfterClose = new Date(item.closeDate.getTime() + 7 * 24 * 60 * 60 * 1000);
+      if (new Date() > sevenDaysAfterClose) return false;
+    }
+
+    // 1. Keyword search (fullName, shortName, id, region)
+    if (calendarFilters.search.trim()) {
+      const q = calendarFilters.search.toLowerCase().trim();
+      const matchName = item.fullName.toLowerCase().includes(q);
+      const matchShort = item.shortName?.toLowerCase().includes(q);
+      const matchId = item.id.toLowerCase().includes(q);
+      const matchRegion = item.region?.toLowerCase().includes(q);
+      const matchType = item.institutionType?.toLowerCase().includes(q);
+      if (!matchName && !matchShort && !matchId && !matchRegion && !matchType) return false;
+    }
+
+    // 2. Institution Type
+    if (calendarFilters.institutionType !== "all") {
+      if (calendarFilters.institutionType === "public_state") {
+        if (item.institutionType !== "State University" && item.institutionType !== "Public") return false;
+      } else if (item.institutionType !== calendarFilters.institutionType) {
+        return false;
+      }
+    }
+
+    // 3. Island Group
+    if (calendarFilters.islandGroup !== "all") {
+      if (item.islandGroup !== calendarFilters.islandGroup && item.islandGroup !== "Nationwide") return false;
+    }
+
+    // 4. Region
+    if (calendarFilters.region !== "all") {
+      if (item.region !== calendarFilters.region && item.region !== "Nationwide") return false;
+    }
+
+    // 5. Category (Big 4, UAAP, NCAA)
+    if (calendarFilters.category !== "all") {
+      if (calendarFilters.category === "big4" && !item.isBig4) return false;
+      if (calendarFilters.category === "uaap" && !item.isUAAP) return false;
+      if (calendarFilters.category === "ncaa" && !item.isNCAA) return false;
+    }
+
+    // 6. Open Month
+    if (calendarFilters.openMonth !== "all") {
+      const openM = item.openDate.getMonth() + 1;
+      if (String(openM) !== calendarFilters.openMonth) return false;
+    }
+
+    // 7. Close Month
+    if (calendarFilters.closeMonth !== "all") {
+      if (!item.closeDate) return false;
+      const closeM = item.closeDate.getMonth() + 1;
+      if (String(closeM) !== calendarFilters.closeMonth) return false;
+    }
+
+    return true;
   }).sort((a, b) => {
     if (!a.closeDate && !b.closeDate) return 0;
     if (!a.closeDate) return 1;
@@ -407,7 +528,7 @@ export default function Dashboard() {
                       <div className="text-3xl font-bold tracking-tight text-foreground">
                         {streak}
                       </div>
-                      <div className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <div className="text-xs font-bold text-foreground/90 dark:text-foreground uppercase tracking-wider">
                         Day Streak
                       </div>
                     </div>
@@ -416,13 +537,13 @@ export default function Dashboard() {
                     </Badge>
 
                     {isStreakAboutToEnd && (
-                      <div className="mt-3 p-3 rounded-lg bg-rose-500/15 border border-rose-500/40 text-rose-700 dark:text-rose-300 text-xs font-medium space-y-1.5 animate-pulse shadow-sm">
-                        <div className="flex items-center justify-center gap-1.5 font-bold text-rose-600 dark:text-rose-400 text-xs">
+                      <div className="mt-3 p-3 rounded-lg bg-rose-500/20 border border-rose-500/50 text-rose-950 dark:text-rose-100 text-xs font-medium space-y-1.5 animate-pulse shadow-sm">
+                        <div className="flex items-center justify-center gap-1.5 font-bold text-rose-700 dark:text-rose-200 text-xs">
                           <AlertTriangle className="h-4 w-4 shrink-0" />
                           <span>Streak Ends Today!</span>
                         </div>
-                        <p className="text-[11px] leading-tight text-muted-foreground dark:text-rose-200/90">
-                          You haven't practiced today. Complete a mock test before midnight to keep your <strong>{streak}-day streak</strong> alive!
+                        <p className="text-xs leading-normal font-medium text-foreground dark:text-white">
+                          You haven't practiced today. Complete a mock test before midnight to keep your <strong className="font-bold text-foreground dark:text-white">{streak}-day streak</strong> alive!
                         </p>
                       </div>
                     )}
@@ -470,24 +591,20 @@ export default function Dashboard() {
                         ? `You have ${needsReview} question${needsReview === 1 ? "" : "s"} ready for review and ${mastered} mastered.`
                         : "Missed mock test questions are automatically saved to your flashcard deck for smart reinforcement."}
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button asChild variant="default" size="sm" className="h-8 text-xs font-semibold gap-1 bg-primary hover:bg-primary/90">
+                    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="w-full">
+                      <Button asChild variant="default" size="sm" className="w-full h-8 text-xs font-semibold gap-1.5 bg-primary hover:bg-primary/90 cursor-pointer">
                         <Link href="/mistakes">
                           <Layers className="h-3.5 w-3.5" />
-                          Flashcards
+                          Open Mistake Diary & Flashcards
                         </Link>
                       </Button>
-                      <Button asChild variant="outline" size="sm" className="h-8 text-xs font-semibold gap-1">
-                        <Link href="/mistakes">
-                          <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                          Target Quiz
-                        </Link>
-                      </Button>
-                    </div>
+                    </motion.div>
                   </CardContent>
                 </Card>
               );
             })()}
+
+
           </div>
 
           {/* Right Column: My Universities & Application Timelines */}
@@ -540,6 +657,7 @@ export default function Dashboard() {
                       uni.id === 'upcat' ? 'text-primary' :
                       uni.id === 'ateneo' ? 'text-[#003366]' :
                       uni.id === 'dlsu' ? 'text-[#00703c]' :
+                      uni.id === 'ust' ? 'text-amber-500 dark:text-amber-400' :
                       uni.id === 'bu' ? 'text-[#009cb8]' : 'text-primary';
 
                     return (
@@ -658,14 +776,28 @@ export default function Dashboard() {
             {/* Application Timelines section moved below My Universities */}
             <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <h2 className="text-2xl font-bold tracking-tight">Application Timelines</h2>
-                <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 font-extrabold px-2.5 py-1 text-xs">
-                  S.Y. 2027–2028
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-bold tracking-tight">Application Timelines</h2>
+                  <Badge variant="secondary" className="bg-primary/10 text-primary border border-primary/20 font-extrabold px-2.5 py-1 text-xs">
+                    S.Y. 2027–2028
+                  </Badge>
+                </div>
+                {(activeFilterCount > 0 || calendarFilters.search.trim().length > 0) && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 font-medium"
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    <span>Filters auto-saved to account</span>
+                  </motion.div>
+                )}
               </div>
+
               <Card className="border border-border bg-card shadow-sm overflow-hidden">
-                <CardHeader className="pb-3 bg-muted/20 dark:bg-muted/10 border-b">
-                  <div className="flex items-center justify-between gap-2">
+                <CardHeader className="pb-3 bg-muted/20 dark:bg-muted/10 border-b space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
                       <Calendar className="h-5 w-5 text-indigo-500" />
                       <div>
@@ -673,7 +805,306 @@ export default function Dashboard() {
                         <CardDescription className="text-xs">University application dates & deadlines for S.Y. 2027-2028</CardDescription>
                       </div>
                     </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {/* Search Icon Button */}
+                      <Button
+                        size="sm"
+                        variant={isSearchOpen || calendarFilters.search ? "default" : "outline"}
+                        onClick={() => setIsSearchOpen((prev) => !prev)}
+                        className="h-8 w-8 p-0 relative"
+                        title="Search universities"
+                        id="admission-search-toggle-btn"
+                      >
+                        <Search className="h-4 w-4" />
+                        {calendarFilters.search && (
+                          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-rose-500 rounded-full border-2 border-background" />
+                        )}
+                        <span className="sr-only">Search</span>
+                      </Button>
+
+                      {/* Filter Icon Button */}
+                      <Button
+                        size="sm"
+                        variant={isFilterOpen || activeFilterCount > 0 ? "default" : "outline"}
+                        onClick={() => setIsFilterOpen((prev) => !prev)}
+                        className="h-8 w-8 p-0 relative"
+                        title="Filter universities"
+                        id="admission-filter-toggle-btn"
+                      >
+                        <SlidersHorizontal className="h-4 w-4" />
+                        {activeFilterCount > 0 && (
+                          <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-indigo-600 text-white text-[9px] font-bold flex items-center justify-center border border-background">
+                            {activeFilterCount}
+                          </span>
+                        )}
+                        <span className="sr-only">Filters</span>
+                      </Button>
+
+                      {/* Reset Button (visible when any filter or search active) */}
+                      {(calendarFilters.search || activeFilterCount > 0) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={handleResetCalendarFilters}
+                          className="h-8 w-8 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-500/10"
+                          title="Reset all filters"
+                          id="admission-filters-reset-btn"
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          <span className="sr-only">Reset Filters</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Expandable Search Bar */}
+                  {isSearchOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="relative pt-1"
+                    >
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        type="text"
+                        autoFocus
+                        placeholder="Search university by name, abbreviation (e.g. ADU, BENILDE), or region..."
+                        value={calendarFilters.search}
+                        onChange={(e) => handleUpdateCalendarFilter("search", e.target.value)}
+                        className="pl-9 pr-16 h-9 text-xs bg-background border-border shadow-none focus-visible:ring-indigo-500"
+                        id="admission-search-input"
+                      />
+                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                        {calendarFilters.search && (
+                          <button
+                            onClick={() => handleUpdateCalendarFilter("search", "")}
+                            className="p-1 text-muted-foreground hover:text-foreground rounded"
+                            title="Clear search"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setIsSearchOpen(false)}
+                          className="p-1 text-muted-foreground hover:text-foreground rounded"
+                          title="Hide search"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Expandable Filter Box */}
+                  {isFilterOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="p-3 rounded-lg border border-border/70 bg-background/80 backdrop-blur-xs space-y-2.5 pt-2"
+                    >
+                      <div className="flex items-center justify-between pb-1 border-b border-border/40">
+                        <div className="flex items-center gap-1.5 text-xs font-semibold">
+                          <Filter className="h-3.5 w-3.5 text-indigo-500" />
+                          <span>Filter Options</span>
+                          {activeFilterCount > 0 && (
+                            <span className="text-[10px] bg-primary/10 text-primary font-bold px-1.5 py-0.5 rounded-full">
+                              {activeFilterCount} Active
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {activeFilterCount > 0 && (
+                            <button
+                              onClick={() => {
+                                const resetWithoutSearch = { ...DEFAULT_CALENDAR_FILTERS, search: calendarFilters.search };
+                                setCalendarFilters(resetWithoutSearch);
+                                saveUserCalendarFilters(user, resetWithoutSearch);
+                              }}
+                              className="text-[11px] text-rose-500 hover:underline"
+                            >
+                              Clear filters
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setIsFilterOpen(false)}
+                            className="text-muted-foreground hover:text-foreground p-0.5 rounded"
+                            title="Close filter panel"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 text-xs">
+                        {/* Institution Type */}
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Type / Governance</label>
+                          <select
+                            value={calendarFilters.institutionType}
+                            onChange={(e) => handleUpdateCalendarFilter("institutionType", e.target.value)}
+                            className="w-full h-8 px-2 rounded-md border border-input bg-card text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                          >
+                            <option value="all">All Types</option>
+                            <option value="State University">State Universities (SUCs)</option>
+                            <option value="Public">Public & Local Colleges</option>
+                            <option value="Private">Private Universities</option>
+                            <option value="Government Scholarship">Scholarships</option>
+                          </select>
+                        </div>
+
+                        {/* Island Group */}
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Island Group</label>
+                          <select
+                            value={calendarFilters.islandGroup}
+                            onChange={(e) => handleUpdateCalendarFilter("islandGroup", e.target.value)}
+                            className="w-full h-8 px-2 rounded-md border border-input bg-card text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                          >
+                            <option value="all">All Islands</option>
+                            <option value="Luzon">Luzon</option>
+                            <option value="Visayas">Visayas</option>
+                            <option value="Mindanao">Mindanao</option>
+                          </select>
+                        </div>
+
+                        {/* Specific Region */}
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Region</label>
+                          <select
+                            value={calendarFilters.region}
+                            onChange={(e) => handleUpdateCalendarFilter("region", e.target.value)}
+                            className="w-full h-8 px-2 rounded-md border border-input bg-card text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                          >
+                            <option value="all">All Regions</option>
+                            <option value="NCR">NCR (Metro Manila)</option>
+                            <option value="Region III">Region III (Central Luzon)</option>
+                            <option value="Region IV-A">Region IV-A (CALABARZON)</option>
+                            <option value="Region V">Region V (Bicol)</option>
+                            <option value="Region VII">Region VII (Central Visayas)</option>
+                            <option value="Region VIII">Region VIII (Eastern Visayas)</option>
+                          </select>
+                        </div>
+
+                        {/* League / Category */}
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">League / Group</label>
+                          <select
+                            value={calendarFilters.category}
+                            onChange={(e) => handleUpdateCalendarFilter("category", e.target.value)}
+                            className="w-full h-8 px-2 rounded-md border border-input bg-card text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                          >
+                            <option value="all">All Leagues</option>
+                            <option value="big4">Big 4 Universities</option>
+                            <option value="uaap">UAAP Schools</option>
+                            <option value="ncaa">NCAA Schools</option>
+                          </select>
+                        </div>
+
+                        {/* Open Month */}
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Opens In</label>
+                          <select
+                            value={calendarFilters.openMonth}
+                            onChange={(e) => handleUpdateCalendarFilter("openMonth", e.target.value)}
+                            className="w-full h-8 px-2 rounded-md border border-input bg-card text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                          >
+                            <option value="all">Any Open Month</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                          </select>
+                        </div>
+
+                        {/* Close Month */}
+                        <div>
+                          <label className="text-[10px] font-bold uppercase text-muted-foreground block mb-1">Closes In</label>
+                          <select
+                            value={calendarFilters.closeMonth}
+                            onChange={(e) => handleUpdateCalendarFilter("closeMonth", e.target.value)}
+                            className="w-full h-8 px-2 rounded-md border border-input bg-card text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+                          >
+                            <option value="all">Any Close Month</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10">October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                            <option value="1">January</option>
+                            <option value="3">March</option>
+                          </select>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  {/* Active Filter Chips (shown when panel is closed and filters exist) */}
+                  {!isFilterOpen && (activeFilterCount > 0 || calendarFilters.search) && (
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5 text-[11px]">
+                      <span className="text-muted-foreground font-medium text-[10px] uppercase">Active:</span>
+                      {calendarFilters.search && (
+                        <Badge variant="secondary" className="gap-1 font-normal py-0.5 px-2 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/20">
+                          Search: "{calendarFilters.search}"
+                          <button onClick={() => handleUpdateCalendarFilter("search", "")} className="hover:opacity-75">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                      {calendarFilters.institutionType !== "all" && (
+                        <Badge variant="secondary" className="gap-1 font-normal py-0.5 px-2">
+                          Type: {calendarFilters.institutionType}
+                          <button onClick={() => handleUpdateCalendarFilter("institutionType", "all")} className="hover:opacity-75">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                      {calendarFilters.islandGroup !== "all" && (
+                        <Badge variant="secondary" className="gap-1 font-normal py-0.5 px-2">
+                          Island: {calendarFilters.islandGroup}
+                          <button onClick={() => handleUpdateCalendarFilter("islandGroup", "all")} className="hover:opacity-75">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                      {calendarFilters.region !== "all" && (
+                        <Badge variant="secondary" className="gap-1 font-normal py-0.5 px-2">
+                          Region: {calendarFilters.region}
+                          <button onClick={() => handleUpdateCalendarFilter("region", "all")} className="hover:opacity-75">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                      {calendarFilters.category !== "all" && (
+                        <Badge variant="secondary" className="gap-1 font-normal py-0.5 px-2">
+                          Group: {calendarFilters.category === "big4" ? "Big 4" : calendarFilters.category.toUpperCase()}
+                          <button onClick={() => handleUpdateCalendarFilter("category", "all")} className="hover:opacity-75">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                      {calendarFilters.openMonth !== "all" && (
+                        <Badge variant="secondary" className="gap-1 font-normal py-0.5 px-2">
+                          Opens: Month {calendarFilters.openMonth}
+                          <button onClick={() => handleUpdateCalendarFilter("openMonth", "all")} className="hover:opacity-75">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                      {calendarFilters.closeMonth !== "all" && (
+                        <Badge variant="secondary" className="gap-1 font-normal py-0.5 px-2">
+                          Closes: Month {calendarFilters.closeMonth}
+                          <button onClick={() => handleUpdateCalendarFilter("closeMonth", "all")} className="hover:opacity-75">
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                 </CardHeader>
                 <CardContent className="p-4">
                   {visibleTimelines.length === 0 ? (
@@ -698,7 +1129,7 @@ export default function Dashboard() {
                             <div className="space-y-2">
                               <div className="flex items-center justify-between gap-1">
                                 <span className="text-xs font-extrabold uppercase tracking-wider text-foreground">
-                                  {item.id.toUpperCase()}
+                                  {item.shortName || item.id.toUpperCase()}
                                 </span>
                                 <span className={`text-[10px] px-2 py-0.5 rounded-full border font-bold shrink-0 ${
                                   isCritical

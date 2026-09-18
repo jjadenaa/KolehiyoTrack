@@ -5,12 +5,15 @@ import {
   AI_PROVIDERS, 
   isAutoSwitchAIEnabled, 
   setAutoSwitchAIEnabled, 
-  setActiveAIProvider,
-  getActiveAIProvider,
-  getStoredApiKeyForProvider,
+  setActiveAIProvider, 
+  getActiveAIProvider, 
+  getStoredApiKeyForProvider, 
   saveStoredApiKeyForProvider,
-  hasAnyCustomApiKey,
-  getActiveApiKeyInfo,
+  parseCloudflareCredentials,
+  getStoredCloudflareAccountId,
+  saveStoredCloudflareAccountId,
+  hasAnyCustomApiKey, 
+  getActiveApiKeyInfo, 
   AutoSwitchEventDetail 
 } from "@/lib/geminiKey";
 import { testAIProviderConnection } from "@/lib/geminiClientService";
@@ -51,7 +54,7 @@ interface AILimitCounterProps {
   showDetailsOnClick?: boolean;
 }
 
-const PROVIDER_LIST: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+const PROVIDER_LIST: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
 
 export function AILimitCounter({ 
   compact = false, 
@@ -66,6 +69,7 @@ export function AILimitCounter({
   // Engine & API Key management state
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>(getActiveAIProvider());
   const [apiKey, setApiKey] = useState("");
+  const [cfAccountId, setCfAccountId] = useState(() => getStoredCloudflareAccountId());
   const [showKey, setShowKey] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
@@ -79,7 +83,14 @@ export function AILimitCounter({
     if (isOpen) {
       const active = getActiveAIProvider();
       setSelectedProvider(active);
-      setApiKey(getStoredApiKeyForProvider(active));
+      if (active === "cloudflare") {
+        const stored = getStoredApiKeyForProvider("cloudflare");
+        const parsed = parseCloudflareCredentials(stored);
+        setCfAccountId(parsed.accountId || getStoredCloudflareAccountId());
+        setApiKey(parsed.apiToken);
+      } else {
+        setApiKey(getStoredApiKeyForProvider(active));
+      }
       setSavedSuccess(false);
       setTestResult(null);
     }
@@ -94,12 +105,26 @@ export function AILimitCounter({
   const handleQuickSwitch = (provider: AIProvider) => {
     setActiveAIProvider(provider);
     setSelectedProvider(provider);
-    setApiKey(getStoredApiKeyForProvider(provider));
+    if (provider === "cloudflare") {
+      const stored = getStoredApiKeyForProvider("cloudflare");
+      const parsed = parseCloudflareCredentials(stored);
+      setCfAccountId(parsed.accountId || getStoredCloudflareAccountId());
+      setApiKey(parsed.apiToken);
+    } else {
+      setApiKey(getStoredApiKeyForProvider(provider));
+    }
   };
 
   const handleSelectProvider = (prov: AIProvider) => {
     setSelectedProvider(prov);
-    setApiKey(getStoredApiKeyForProvider(prov));
+    if (prov === "cloudflare") {
+      const stored = getStoredApiKeyForProvider("cloudflare");
+      const parsed = parseCloudflareCredentials(stored);
+      setCfAccountId(parsed.accountId || getStoredCloudflareAccountId());
+      setApiKey(parsed.apiToken);
+    } else {
+      setApiKey(getStoredApiKeyForProvider(prov));
+    }
     setTestResult(null);
     setSavedSuccess(false);
   };
@@ -109,10 +134,21 @@ export function AILimitCounter({
   };
 
   const handleTestKey = async () => {
-    const cleanKey = cleanKeyInput(apiKey);
+    let cleanKey = cleanKeyInput(apiKey);
     if (!cleanKey) {
-      setTestResult({ success: false, message: `Please enter an API key for ${AI_PROVIDERS[selectedProvider].name} first.` });
+      setTestResult({ success: false, message: `Please enter an API key or token for ${AI_PROVIDERS[selectedProvider].name} first.` });
       return;
+    }
+
+    if (selectedProvider === "cloudflare") {
+      const cleanAcc = cfAccountId.trim();
+      if (!cleanAcc && !cleanKey.includes(":")) {
+        setTestResult({ success: false, message: "Please enter your Cloudflare Account ID and API Token." });
+        return;
+      }
+      if (!cleanKey.includes(":") && cleanAcc) {
+        cleanKey = `${cleanAcc}:${cleanKey}`;
+      }
     }
 
     setTestingKey(true);
@@ -122,6 +158,9 @@ export function AILimitCounter({
       const res = await testAIProviderConnection(selectedProvider, cleanKey);
       setTestResult(res);
       if (res.success) {
+        if (selectedProvider === "cloudflare") {
+          saveStoredCloudflareAccountId(cfAccountId.trim());
+        }
         saveStoredApiKeyForProvider(selectedProvider, cleanKey);
         setActiveAIProvider(selectedProvider);
       }
@@ -136,7 +175,13 @@ export function AILimitCounter({
   };
 
   const handleSaveKey = () => {
-    const trimmed = cleanKeyInput(apiKey);
+    let trimmed = cleanKeyInput(apiKey);
+    if (selectedProvider === "cloudflare" && trimmed && !trimmed.includes(":") && cfAccountId.trim()) {
+      trimmed = `${cfAccountId.trim()}:${trimmed}`;
+    }
+    if (selectedProvider === "cloudflare") {
+      saveStoredCloudflareAccountId(cfAccountId.trim());
+    }
     saveStoredApiKeyForProvider(selectedProvider, trimmed);
     if (trimmed) {
       setActiveAIProvider(selectedProvider);
@@ -150,6 +195,10 @@ export function AILimitCounter({
   const handleClearKey = () => {
     saveStoredApiKeyForProvider(selectedProvider, "");
     setApiKey("");
+    if (selectedProvider === "cloudflare") {
+      setCfAccountId("");
+      saveStoredCloudflareAccountId("");
+    }
     setSavedSuccess(true);
     setTestResult(null);
     setTimeout(() => {
@@ -183,23 +232,24 @@ export function AILimitCounter({
           type="button"
           onClick={() => showDetailsOnClick && setIsOpen(true)}
           className={cn(
-            "group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-xs select-none",
+            "group inline-flex items-center gap-1 px-1.5 py-1 sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border transition-all cursor-pointer shadow-xs select-none",
             "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 hover:border-emerald-500/50",
             className
           )}
           title={`Unlimited AI active (${providerName}). Click to manage AI limits and keys.`}
           aria-label="View AI status and settings"
         >
-          <span className="relative flex h-2 w-2 shrink-0">
+          <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 shrink-0">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+            <span className="relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2 bg-emerald-500" />
           </span>
-          <Zap className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+          <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-500 shrink-0" />
           <span className="font-bold tracking-tight">
-            {providerName.split(" ")[0]} AI
+            <span className="hidden sm:inline">{providerName.split(" ")[0]} </span>AI
           </span>
-          <span className="text-[11px] font-normal text-muted-foreground">•</span>
-          <span className="text-[11px] font-medium opacity-90">Unlimited</span>
+          <span className="text-[10px] sm:text-[11px] font-normal text-muted-foreground">•</span>
+          <span className="text-[10px] sm:text-[11px] font-medium opacity-90 hidden xs:inline">Unlimited</span>
+          <span className="text-[10px] font-extrabold text-emerald-600 dark:text-emerald-400 inline xs:hidden">∞</span>
         </button>
       );
     }
@@ -209,7 +259,7 @@ export function AILimitCounter({
         type="button"
         onClick={() => showDetailsOnClick && setIsOpen(true)}
         className={cn(
-          "group inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all cursor-pointer shadow-xs select-none",
+          "group inline-flex items-center gap-1 px-1.5 py-1 sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border transition-all cursor-pointer shadow-xs select-none",
           isExhausted
             ? "bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border-rose-500/30 hover:border-rose-500/50"
             : isLow
@@ -220,24 +270,24 @@ export function AILimitCounter({
         title={`${remaining} of ${total} free AI queries remaining today. Resets in ${resetTimeStr}. Click to manage AI limits and keys.`}
         aria-label="View AI usage limit counter"
       >
-        <span className="relative flex h-2 w-2 shrink-0">
+        <span className="relative flex h-1.5 w-1.5 sm:h-2 sm:w-2 shrink-0">
           <span className={cn(
             "animate-ping absolute inline-flex h-full w-full rounded-full opacity-75",
             isExhausted ? "bg-rose-400" : isLow ? "bg-amber-400" : "bg-primary/60"
           )} />
           <span className={cn(
-            "relative inline-flex rounded-full h-2 w-2",
+            "relative inline-flex rounded-full h-1.5 w-1.5 sm:h-2 sm:w-2",
             isExhausted ? "bg-rose-500" : isLow ? "bg-amber-500" : "bg-primary"
           )} />
         </span>
         <Zap className={cn(
-          "h-3.5 w-3.5 shrink-0 transition-transform group-hover:scale-110",
+          "h-3 w-3 sm:h-3.5 sm:w-3.5 shrink-0 transition-transform group-hover:scale-110",
           isExhausted ? "text-rose-500" : isLow ? "text-amber-500" : "text-amber-500"
         )} />
         <span className="font-bold tracking-tight">
-          {remaining}/{total} AI Left
+          {remaining}<span className="hidden xs:inline">/{total} AI</span><span className="inline xs:hidden"> Left</span>
         </span>
-        <div className="w-8 h-1.5 bg-muted rounded-full overflow-hidden hidden sm:block">
+        <div className="w-8 h-1.5 bg-muted rounded-full overflow-hidden hidden md:block">
           <div
             className={cn(
               "h-full transition-all duration-300 rounded-full",
@@ -567,11 +617,42 @@ export function AILimitCounter({
                   </p>
                 </div>
 
+                {/* Cloudflare Account ID input */}
+                {selectedProvider === "cloudflare" && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground">
+                        Cloudflare Account ID:
+                      </label>
+                      <span className="text-[10px] text-muted-foreground">
+                        From dash.cloudflare.com sidebar
+                      </span>
+                    </div>
+                    <Input
+                      type="text"
+                      value={cfAccountId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.includes(":")) {
+                          const parts = val.split(":");
+                          setCfAccountId(parts[0].trim());
+                          setApiKey(parts[1].trim());
+                        } else {
+                          setCfAccountId(val);
+                        }
+                        setTestResult(null);
+                      }}
+                      placeholder="e.g. 7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c"
+                      className="text-xs font-mono"
+                    />
+                  </div>
+                )}
+
                 {/* Key Input */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-foreground">
-                      Paste {currentMeta.name} API Key:
+                      {selectedProvider === "cloudflare" ? "Cloudflare API Token:" : `Paste ${currentMeta.name} API Key:`}
                     </label>
                     {hasKeyForSelected && (
                       <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">

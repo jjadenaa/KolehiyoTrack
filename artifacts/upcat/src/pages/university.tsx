@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { syncBankWithFirestore, uploadBankToFirestore } from "@/lib/firestoreBank";
+import { syncBannedStoreWithFirestore } from "@/lib/banned-questions-store";
 import { Session } from "@/types/session";
 import { useTest } from "@/context/TestContext";
 import { SUBJECT_LABELS, formatTime, calcTotalSeconds, getSecondsPerItem } from "@/lib/format";
@@ -24,7 +25,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   getBankStats, getBankQuestions, addBankQuestions, clearBank,
-  resetUsedIds, pickQuestions, BankQuestion
+  resetUsedIds, pickQuestions, BankQuestion, parseRawQuestionBankText
 } from "@/lib/questionBank";
 import { getLocalMistakes } from "@/lib/mistakeDiary";
 import { useUpcatCountdown } from "@/hooks/useCountdown";
@@ -908,315 +909,9 @@ function PromptGeneratorPanel({
       }
     }
 
-    // Helper: try to parse as simple text format first, then JSON
+    // Helper: parse questions using universal parser
     const tryParse = (): BankQuestion[] | null => {
-      // 1. Try strict JSON
-      try {
-        const parsed = JSON.parse(text);
-        if (!Array.isArray(parsed)) return null;
-        const valid: BankQuestion[] = [];
-        for (const item of parsed) {
-          if (
-            typeof item.id === "string" &&
-            typeof item.subject === "string" &&
-            typeof item.text === "string" &&
-            Array.isArray(item.choices) &&
-            typeof item.correctAnswer === "string"
-          ) {
-            const q: BankQuestion = {
-              id: item.id,
-              subject: item.subject,
-              topic: item.topic,
-              text: item.text,
-              imageUrl: item.imageUrl,
-              passageId: item.passageId,
-              choices: item.choices,
-              correctAnswer: item.correctAnswer,
-              explanation: item.explanation ?? "",
-            };
-            if (item.diagram) q.diagram = item.diagram;
-            valid.push(q);
-          }
-        }
-        return valid.length > 0 ? valid : null;
-      } catch {
-        // Not valid JSON, try text format
-      }
-
-      // 2. Try simple text format (ID:, SUBJECT:, PASSAGE:, QUESTION:, A), B), C), D), CORRECT:, EXPLANATION:)
-      let preprocessedText = text
-        .replace(/\r\n/g, "\n")
-        .replace(/(^|\n|\s+)(UNIVERSITY:|ID:|SUBJECT:|TOPIC:|PASSAGE:|QUESTION:|CORRECT:|EXPLANATION:|DIAGRAM:)\s*/gi, (_match, _prefix, tag) => {
-          return `\n${tag.toUpperCase()} `;
-        })
-        .replace(/\s+([A-D][\).])\s+/g, "\n$1 ");
-
-      const blocks = preprocessedText
-        .split(/\n\s*-{3,}\s*\n|\n+(?=(?:UNIVERSITY:|ID:)\s+)/i)
-        .filter((b) => b.trim().length > 0);
-
-      const valid: BankQuestion[] = [];
-      let currentPassageId = 0;
-      let lastPassageText = "";
-
-      let persistentSubject = "";
-      let persistentTopic = "";
-      let persistentPassage = "";
-
-      for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
-        const block = blocks[blockIdx].trim();
-        if (!block) continue;
-
-        const lines = block.split("\n");
-        let id = "";
-        let currentBlockSubject = "";
-        let currentBlockTopic = "";
-        let currentBlockPassage = "";
-        let hasExplicitPassage = false;
-        let question = "";
-        const choices: { id: string; text: string }[] = [];
-        let correctAnswer = "";
-        let explanation = "";
-        let diagram: any = undefined;
-
-        let i = 0;
-        while (i < lines.length) {
-          const line = lines[i].trim();
-          const upper = line.toUpperCase();
-
-          if (upper.startsWith("UNIVERSITY:")) {
-            i++;
-          } else if (upper.startsWith("ID:")) {
-            id = line.slice(3).trim();
-            i++;
-          } else if (upper.startsWith("SUBJECT:")) {
-            currentBlockSubject = line.slice(8).trim();
-            i++;
-          } else if (upper.startsWith("TOPIC:")) {
-            currentBlockTopic = line.slice(6).trim();
-            i++;
-          } else if (upper.startsWith("PASSAGE:")) {
-            hasExplicitPassage = true;
-            // Collect multi-line passage until QUESTION: or choice or end of block
-            const start = line.slice(8).trim();
-            const passageLines: string[] = start ? [start] : [];
-            i++;
-            while (i < lines.length) {
-              const next = lines[i].trim();
-              const nextUpper = next.toUpperCase();
-              if (
-                nextUpper.startsWith("QUESTION:") ||
-                /^[A-D][).]\s*/.test(next) ||
-                nextUpper.startsWith("CORRECT:") ||
-                nextUpper.startsWith("EXPLANATION:") ||
-                nextUpper.startsWith("ID:") ||
-                nextUpper.startsWith("UNIVERSITY:") ||
-                nextUpper.startsWith("SUBJECT:") ||
-                nextUpper.startsWith("TOPIC:")
-              ) {
-                break;
-              }
-              passageLines.push(next);
-              i++;
-            }
-            currentBlockPassage = passageLines.join("\n").trim();
-          } else if (upper.startsWith("QUESTION:")) {
-            const start = line.slice(9).trim();
-            const qLines: string[] = start ? [start] : [];
-            i++;
-            while (i < lines.length) {
-              const next = lines[i].trim();
-              const nextUpper = next.toUpperCase();
-              if (
-                /^[A-D][).]\s*/.test(next) ||
-                nextUpper.startsWith("CORRECT:") ||
-                nextUpper.startsWith("EXPLANATION:") ||
-                nextUpper.startsWith("ID:") ||
-                nextUpper.startsWith("UNIVERSITY:") ||
-                nextUpper.startsWith("SUBJECT:") ||
-                nextUpper.startsWith("TOPIC:") ||
-                nextUpper.startsWith("DIAGRAM:") ||
-                nextUpper.startsWith("PASSAGE:")
-              ) {
-                break;
-              }
-              qLines.push(next);
-              i++;
-            }
-            question = qLines.join("\n").trim();
-          } else if (/^[A-D][).]\s*/.test(line)) {
-            const match = line.match(/^([A-D])[).]\s*(.*)$/);
-            if (match) {
-              choices.push({ id: match[1], text: match[2].trim() });
-            }
-            i++;
-          } else if (upper.startsWith("CORRECT:")) {
-            correctAnswer = line.slice(8).trim();
-            i++;
-          } else if (upper.startsWith("EXPLANATION:")) {
-            const start = line.slice(12).trim();
-            const expLines: string[] = start ? [start] : [];
-            i++;
-            while (i < lines.length) {
-              const next = lines[i].trim();
-              const nextUpper = next.toUpperCase();
-              if (nextUpper.startsWith("ID:") || nextUpper.startsWith("---") || nextUpper.startsWith("DIAGRAM:") || nextUpper.startsWith("UNIVERSITY:")) {
-                break;
-              }
-              expLines.push(next);
-              i++;
-            }
-            explanation = expLines.join("\n").trim();
-          } else if (upper.startsWith("DIAGRAM:")) {
-            const start = line.slice(8).trim();
-            const diagramLines: string[] = start ? [start] : [];
-            i++;
-            while (i < lines.length) {
-              const next = lines[i].trim();
-              const nextUpper = next.toUpperCase();
-              if (nextUpper.startsWith("ID:") || nextUpper.startsWith("---") || nextUpper.startsWith("UNIVERSITY:")) {
-                break;
-              }
-              diagramLines.push(next);
-              i++;
-            }
-            try {
-              const diagramText = diagramLines.join("\n").trim();
-              if (diagramText) {
-                const parsed = JSON.parse(diagramText);
-                if (parsed && typeof parsed === "object") {
-                  diagram = parsed;
-                }
-              }
-            } catch {
-              // Invalid diagram JSON, skip silently
-            }
-          } else {
-            i++;
-          }
-        }
-
-        if (currentBlockSubject !== "") {
-          if (currentBlockSubject !== persistentSubject) {
-             persistentTopic = "";
-             persistentPassage = "";
-          }
-          persistentSubject = currentBlockSubject;
-        }
-        if (currentBlockTopic !== "") persistentTopic = currentBlockTopic;
-        if (hasExplicitPassage) persistentPassage = currentBlockPassage;
-
-        let subject = currentBlockSubject || persistentSubject;
-        const topic = currentBlockTopic || persistentTopic;
-        const passage = hasExplicitPassage ? currentBlockPassage : persistentPassage;
-
-        // Skip blocks that don't contain any choices (e.g. standalone PASSAGE: blocks)
-        if (choices.length < 2) continue;
-
-        // Auto-generate ID if missing
-        if (!id) {
-          id = `q_custom_${Date.now()}_${blockIdx}_${Math.floor(Math.random() * 1000)}`;
-        }
-
-        // Fallback subject if missing
-        if (!subject) {
-          const combinedText = `${passage} ${question}`.toLowerCase();
-          const isFilipino = /\b(ang|ng|mga|sa|na|si|ni|kay|ako|ikaw|siya|kami|tayo|kayo|sila|ito|iyan|iyon|dito|diyan|doon|mula|para|dahil|kung|kapag|nang|ipaliwanag|suriin|talahanayan|rehiyon|tanong)\b/i.test(combinedText);
-          if (passage) {
-            subject = isFilipino ? "reading_filipino" : "reading_english";
-          } else {
-            subject = isFilipino ? "language_filipino" : "general";
-          }
-        }
-
-        // Map human-readable subject names to internal IDs
-        const subjectMap: Record<string, string> = {
-          "READING FILIPINO": "reading_filipino",
-          "READING ENGLISH": "reading_english",
-          "READING_FILIPINO": "reading_filipino",
-          "READING_ENGLISH": "reading_english",
-          "READING COMPREHENSION": "reading_english",
-          "READING COMPREHENSION (ENGLISH)": "reading_english",
-          "READING COMPREHENSION (FILIPINO)": "reading_filipino",
-          "LANGUAGE FILIPINO": "language_filipino",
-          "LANGUAGE ENGLISH": "language_english",
-          "LANGUAGE_FILIPINO": "language_filipino",
-          "LANGUAGE_ENGLISH": "language_english",
-          "FILIPINO LANGUAGE": "language_filipino",
-          "ENGLISH LANGUAGE": "language_english",
-          "LANGUAGE PROFICIENCY": "language_english",
-          "LANGUAGE PROFICIENCY (ENGLISH)": "language_english",
-          "LANGUAGE PROFICIENCY (FILIPINO)": "language_filipino",
-          "LANGUAGE PROFICIENCY & EAPP": "language_english",
-          "MATHEMATICS": "math",
-          "MATH": "math",
-          "MATHEMATICS PROFICIENCY": "math",
-          "MATHEMATICS & STATISTICS": "math",
-          "NUMERICAL ABILITY": "numerical_ability",
-          "NUMERICAL_ABILITY": "numerical_ability",
-          "STATISTICS": "statistics_research",
-          "STATISTICS & RESEARCH": "statistics_research",
-          "STATISTICS_RESEARCH": "statistics_research",
-          "LOGICAL REASONING": "logical_reasoning",
-          "LOGICAL_REASONING": "logical_reasoning",
-          "ABSTRACT REASONING": "abstract_reasoning",
-          "ABSTRACT_REASONING": "abstract_reasoning",
-          "MENTAL ABILITY": "abstract_reasoning",
-          "MENTAL ABILITY / ABSTRACT REASONING": "abstract_reasoning",
-          "GENERAL INFO": "general_info",
-          "GENERAL INFORMATION": "general_info",
-          "GENERAL_INFO": "general_info",
-          "ANALOGIES & GENERAL INFO": "general_info",
-          "SCIENCE": "science",
-          "SCIENCE SUBTEST": "science",
-          "GENERAL": "general",
-        };
-        const subjectKey = subject.trim().toUpperCase();
-        const mappedSubject = subjectMap[subjectKey] || subject.toLowerCase().replace(/\s+/g, "_");
-
-        // Build text field
-        let text = "";
-        if (passage && question) {
-          text = `PASSAGE:\n${passage}\n\nQUESTION: ${question}`;
-        } else if (passage) {
-          text = `PASSAGE:\n${passage}`;
-        } else if (question) {
-          text = question;
-        } else {
-          text = "";
-        }
-
-        // For reading comprehension: assign passageId based on passage content
-        // so questions with the same passage share the same ID and group together
-        let passageId: string | undefined = undefined;
-        if (passage) {
-          const normPassage = passage.trim().slice(0, 100);
-          if (normPassage === lastPassageText) {
-            // Same passage as previous question, reuse current ID
-            passageId = `p${currentPassageId}`;
-          } else {
-            // New passage, increment ID
-            currentPassageId++;
-            passageId = `p${currentPassageId}`;
-            lastPassageText = normPassage;
-          }
-        }
-
-        const q: BankQuestion = {
-          id,
-          subject: mappedSubject,
-          topic: topic || undefined,
-          text,
-          passageId,
-          choices,
-          correctAnswer: (correctAnswer || choices[0]?.id || "A").toUpperCase(),
-          explanation: explanation || "",
-        };
-        if (diagram) q.diagram = diagram;
-        valid.push(q);
-      }
-
-      return valid.length > 0 ? valid : null;
+      return parseRawQuestionBankText(text, universityId);
     };
 
     const valid = tryParse();
@@ -1303,18 +998,28 @@ function PromptGeneratorPanel({
                 {AVAILABLE_SUBJECTS.map((subject) => {
                   const isSelected = genSelectedSubjects[subject.id];
                   return (
-                    <div key={subject.id} className={cn("rounded-lg border p-3", isSelected ? "bg-card" : "bg-muted/30 opacity-60")}>
+                    <div
+                      key={subject.id}
+                      onClick={() =>
+                        setGenSelectedSubjects((prev) => ({ ...prev, [subject.id]: !prev[subject.id] }))
+                      }
+                      className={cn(
+                        "rounded-lg border p-3 cursor-pointer select-none transition-all text-foreground",
+                        isSelected ? "bg-card border-primary/50 font-semibold" : "bg-card/50 border-border hover:border-primary/30"
+                      )}
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <Checkbox
                             checked={isSelected}
-                            onCheckedChange={(v) =>
-                              setGenSelectedSubjects((prev) => ({ ...prev, [subject.id]: v as boolean }))
-                            }
+                            className="pointer-events-none"
                           />
-                          <span className="text-sm font-semibold">{subject.label}</span>
+                          <span className="text-sm font-semibold text-foreground">{subject.label}</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div
+                          className="flex items-center gap-2"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <NumberInput
                             min={1}
                             max={100}
@@ -1630,6 +1335,16 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
     const doSync = () => {
       setBankSyncMsg("Syncing question bank with your account...");
       setSyncFailed(false);
+      
+      // Sync the banned store in the background
+      syncBannedStoreWithFirestore(params.id, user)
+        .then(() => {
+          refreshBankStats();
+        })
+        .catch((err) => {
+          console.warn("[Dashboard] Banned store sync warning:", err);
+        });
+
       syncBankWithFirestore(user.uid, params.id)
         .then(({ merged }) => {
           setSyncFailed(false);
@@ -1780,8 +1495,20 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                   ? "Ateneo de Manila University - (ACET 2027)"
                   : params.id === 'dlsu'
                   ? "De La Salle University - (DCAT 2027)"
+                  : params.id === 'ust'
+                  ? "University of Santo Tomas - (USTET 2027)"
                   : params.id === 'bu' 
                   ? "Bicol University - (BUCET 2027)" 
+                  : params.id === 'slsu'
+                  ? "Southern Luzon State University - (SLSU 2027)"
+                  : params.id === 'neust'
+                  ? "Nueva Ecija University of Science and Technology - (NEUST 2027)"
+                  : params.id === 'ucn'
+                  ? "University of Camarines Norte - (UCN 2027)"
+                  : params.id === 'jru'
+                  ? "Jose Rizal University - (JRU 2027)"
+                  : params.id === 'ssu'
+                  ? "Sorsogon State University - (SSU 2027)"
                   : "Mock Test Configuration"}
               </h1>
               {(() => {
@@ -1792,7 +1519,13 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                   params.id === 'upcat' ? 'text-primary' :
                   params.id === 'ateneo' ? 'text-[#003366]' :
                   params.id === 'dlsu' ? 'text-[#00703c]' :
-                  params.id === 'bu' ? 'text-[#009cb8]' : 'text-primary';
+                  params.id === 'ust' ? 'text-amber-500 dark:text-amber-400' :
+                  params.id === 'bu' ? 'text-[#009cb8]' :
+                  params.id === 'slsu' ? 'text-[#15803d]' :
+                  params.id === 'neust' ? 'text-[#1e40af]' :
+                  params.id === 'ucn' ? 'text-[#0f766e]' :
+                  params.id === 'jru' ? 'text-[#9a3412]' :
+                  params.id === 'ssu' ? 'text-[#4338ca]' : 'text-primary';
 
                 return (
                   <div className="flex flex-wrap items-center gap-2.5 pt-1">
@@ -1977,7 +1710,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                       key={subject.id}
                       className={cn(
                         "rounded-lg border p-4 transition-colors",
-                        isSelected ? "bg-card" : "bg-muted/30 opacity-60"
+                        isSelected ? "bg-card border-primary/40" : "bg-card/40 border-border text-foreground"
                       )}
                     >
                       <div className="flex items-center justify-between">
@@ -2158,26 +1891,15 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                       </p>
                     )}
 
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => setLocation("/mistakes")}
-                        className="w-full text-xs font-semibold gap-1.5 h-8 bg-primary hover:bg-primary/90"
-                      >
-                        <Layers className="h-3.5 w-3.5" />
-                        Study Cards
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setLocation("/mistakes")}
-                        className="w-full text-xs font-semibold gap-1.5 h-8"
-                      >
-                        <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                        Targeted Quiz
-                      </Button>
-                    </div>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => setLocation("/mistakes")}
+                      className="w-full text-xs font-semibold gap-1.5 h-8 bg-primary hover:bg-primary/90 cursor-pointer"
+                    >
+                      <Layers className="h-3.5 w-3.5" />
+                      Open Mistake Diary & Flashcards
+                    </Button>
                   </CardContent>
                 </Card>
               );

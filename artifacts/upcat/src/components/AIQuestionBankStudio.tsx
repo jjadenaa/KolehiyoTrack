@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addBankQuestions, deleteBankQuestion, BankQuestion } from "@/lib/questionBank";
+import { addBankQuestions, deleteBankQuestion, BankQuestion, parseRawQuestionBankText, getBannedQuestions, unbanQuestion } from "@/lib/questionBank";
 import { SUBJECT_LABELS, getAvailableSubjectsForUniversity, getDefaultItemCounts } from "@/lib/format";
 import { SmartText } from "@/components/SmartText";
 import { AILimitCounter } from "@/components/AILimitCounter";
@@ -111,7 +111,43 @@ export function AIQuestionBankStudio({
   open = true,
   onClose,
 }: AIQuestionBankStudioProps) {
-  const [activeTab, setActiveTab] = useState<"prompt_paste" | "manual" | "generate" | "pdf">("prompt_paste");
+  const [activeTab, setActiveTab] = useState<"notebooklm" | "prompt_paste" | "manual" | "generate" | "pdf" | "banned">("notebooklm");
+
+  const tabsRef = useRef<HTMLDivElement | null>(null);
+
+  const setTabsRef = useCallback((node: HTMLDivElement | null) => {
+    if (tabsRef.current) {
+      const prevNode = tabsRef.current;
+      const prevHandler = (prevNode as any)._handleWheel;
+      if (prevHandler) {
+        prevNode.removeEventListener("wheel", prevHandler);
+      }
+    }
+    
+    tabsRef.current = node;
+    
+    if (node) {
+      const handleWheel = (e: WheelEvent) => {
+        if (e.deltaY !== 0) {
+          e.preventDefault();
+          node.scrollLeft += e.deltaY;
+        }
+      };
+      node.addEventListener("wheel", handleWheel, { passive: false });
+      (node as any)._handleWheel = handleWheel;
+    }
+  }, []);
+
+  // Lock parent page background scroll when uploader/studio is open
+  useEffect(() => {
+    if (open && onClose) {
+      const originalStyle = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalStyle;
+      };
+    }
+  }, [open, onClose]);
 
   const availableSubjects = getAvailableSubjectsForUniversity(universityId);
 
@@ -164,15 +200,39 @@ export function AIQuestionBankStudio({
   // ─────────────────────────────────────────────────────────────────────────────
   // 1. PROMPT GENERATOR, NOTEBOOKLM & PASTE STATE
   // ─────────────────────────────────────────────────────────────────────────────
-  const UPCAT_NOTEBOOK_URL = "https://notebook.google.com/notebook/176db6d9-b9b8-47e9-a65b-b65499e63db9";
-  const [promptSubTab, setPromptSubTab] = useState<"notebooklm" | "generate_prompt">(
-    universityId === "upcat" ? "notebooklm" : "generate_prompt"
-  );
-  // Quick command state for NotebookLM (e.g. "math 20", "science 15")
-  const [notebookCmd, setNotebookCmd] = useState<string>("math 20");
+  const NOTEBOOK_URLS: Record<string, { name: string; url: string; active: boolean }> = {
+    upcat: {
+      name: "UPCAT Reviewer Notebook",
+      url: "https://notebook.google.com/notebook/176db6d9-b9b8-47e9-a65b-b65499e63db9",
+      active: true,
+    },
+    bucet: {
+      name: "BUCET Reviewer Notebook",
+      url: "https://notebook.google.com/notebook/176db6d9-b9b8-47e9-a65b-b65499e63db9",
+      active: true,
+    },
+    acet: {
+      name: "ACET Reviewer Notebook",
+      url: "https://notebook.google.com/notebook/2c189a47-3cc8-4bc5-8ecd-ac338dcdfbc4",
+      active: true,
+    },
+    ustet: {
+      name: "USTET Reviewer Notebook",
+      url: "https://notebook.google.com/",
+      active: false,
+    },
+    dlsu: {
+      name: "DLSU DCAT Reviewer Notebook",
+      url: "https://notebook.google.com/",
+      active: false,
+    },
+  };
+
+  const [promptSubTab, setPromptSubTab] = useState<"notebooklm" | "generate_prompt">("notebooklm");
   const [notebookSubject, setNotebookSubject] = useState<string>(availableSubjects[0]?.id || "math");
-  const [notebookCount, setNotebookCount] = useState<number>(20);
+  const [notebookCount, setNotebookCount] = useState<number>(3);
   const [notebookCopied, setNotebookCopied] = useState<boolean>(false);
+  const [commandCopied, setCommandCopied] = useState<boolean>(false);
   const [showNotebookPromptDetails, setShowNotebookPromptDetails] = useState<boolean>(false);
   const [notebookPasteText, setNotebookPasteText] = useState<string>("");
   const [notebookPasteError, setNotebookPasteError] = useState<string | null>(null);
@@ -207,9 +267,6 @@ export function AIQuestionBankStudio({
       }
       setGenSelectedSubjects(availableSubjects.reduce((acc, s) => ({ ...acc, [s.id]: false }), {}));
       setGenItemCounts(getDefaultItemCounts(universityId));
-      if (universityId === "upcat") {
-        setPromptSubTab("notebooklm");
-      }
     }
   }, [universityId]);
 
@@ -448,7 +505,7 @@ export function AIQuestionBankStudio({
         setSuccessMessage(null);
       }, 4000);
     } else {
-      setManualError("Question could not be added (duplicate ID).");
+      setManualError("This question was identified as already taken in a previous quiz or past session. (Turn on 'Allow duplicate/repeated questions' in Settings to allow it).");
     }
   };
 
@@ -483,6 +540,7 @@ export function AIQuestionBankStudio({
           topic: genTopic.trim() || undefined,
           count: genCount,
           difficulty: genDifficulty,
+          bannedQuestions: getBannedQuestions(universityId).map((q) => q.text),
           apiKey: storedKey || undefined,
         }),
       });
@@ -519,75 +577,117 @@ export function AIQuestionBankStudio({
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // HELPERS FOR NOTEBOOKLM (UPCAT REVIEWER INTEGRATION)
   // ─────────────────────────────────────────────────────────────────────────────
-  const parseQuickNotebookCommand = (cmd: string, subjects: { id: string; label: string }[]) => {
-    const clean = cmd.trim().toLowerCase();
-    if (!clean) return {};
-
-    const numMatch = clean.match(/\b(\d+)\b/);
-    const count = numMatch ? parseInt(numMatch[1], 10) : undefined;
-
-    let subjectId: string | undefined;
-    if (clean.includes("math") || clean.includes("alg") || clean.includes("geom") || clean.includes("calc") || clean.includes("trig")) {
-      subjectId = "math";
-    } else if (clean.includes("sci") || clean.includes("bio") || clean.includes("chem") || clean.includes("phys") || clean.includes("earth")) {
-      subjectId = "science";
-    } else if (clean.includes("read") || clean.includes("comp")) {
-      subjectId = "reading";
-    } else if (clean.includes("lang") || clean.includes("eng") || clean.includes("fil") || clean.includes("gram") || clean.includes("prof")) {
-      subjectId = "language";
-    } else {
-      const found = subjects.find((s) => clean.includes(s.id.toLowerCase()) || clean.includes(s.label.toLowerCase()));
-      if (found) subjectId = found.id;
+  // HELPERS FOR NOTEBOOKLM (UNIVERSITY REVIEWER INTEGRATION)
+  // ─────────────────────────────────────────────────────────────────────────────
+  const getNotebookShorthandCommand = (uni: string, subj: string, count: number) => {
+    // If university is UPCAT, standard default format is e.g. "3 math"
+    // If university is another university (e.g. ACET), format is e.g. "3 acet math"
+    const uniNormalized = uni.toLowerCase();
+    const subjClean = subj.toLowerCase();
+    if (uniNormalized === "upcat") {
+      return `${count} ${subjClean}`;
     }
-
-    return { subjectId, count };
+    return `${count} ${uniNormalized} ${subjClean}`;
   };
 
-  const handleQuickCmdChange = (raw: string) => {
-    setNotebookCmd(raw);
-    const parsed = parseQuickNotebookCommand(raw, availableSubjects);
-    if (parsed.subjectId) {
-      setNotebookSubject(parsed.subjectId);
-    }
-    if (parsed.count && parsed.count > 0 && parsed.count <= 200) {
-      setNotebookCount(parsed.count);
-    }
+  const handleCopyCommandOnly = (cmdText: string) => {
+    navigator.clipboard.writeText(cmdText);
+    setCommandCopied(true);
+    setTimeout(() => setCommandCopied(false), 2000);
   };
 
-  const buildNotebookLMPrompt = (subjId: string, count: number) => {
-    const subjObj = availableSubjects.find((s) => s.id === subjId);
-    const subjectLabel = subjObj?.label || subjId;
-    return `From the uploaded UPCAT reviewers and instructional materials in this notebook, generate exactly ${count} ${subjectLabel} practice questions.
+  const buildNotebookLMPrompt = (targetUni: string, subjId: string, count: number) => {
+    const uniUpper = targetUni.toUpperCase();
+    const isReading = subjId.startsWith("reading");
+    const isEnglishReading = subjId === "reading_english";
+    const isFilipino = subjId.includes("filipino");
 
-Format each question block exactly like this with a blank line and "---" separator between each question:
+    const subjDisplay = subjId === "math"
+      ? "math"
+      : subjId === "science"
+      ? "science"
+      : subjId === "language_english"
+      ? "language_english"
+      : subjId === "language_filipino"
+      ? "language_filipino"
+      : isReading
+      ? (isEnglishReading ? "reading_english" : "reading_filipino")
+      : subjId;
 
-ID: upcat-${subjId}-1
-SUBJECT: ${subjId}
-TOPIC: [Name of topic from reviewer]
-QUESTION: [Question text. Use KaTeX notation for any mathematical formulas, e.g., $2x + 5 = 15$ or $\\frac{a}{b}$]
+    if (isReading) {
+      return `CRITICAL INSTRUCTION: Generate practice questions strictly base ONLY from the sources, reviewers, and study materials that are currently uploaded in this NotebookLM. Do not use outside knowledge or hallucinated information. Follow the format strictly with no extra text, conversational preamble, conversational greetings, or notes. Total questions must equal exactly ${count}. No repeating of questions across sets. Every question item must have a unique ID.
+
+OUTPUT FORMAT FOR READING COMPREHENSION:
+
+UNIVERSITY: ${uniUpper}
+SUBJECT: READING ${isEnglishReading ? "ENGLISH" : "FILIPINO"}
+PASSAGE:
+[Insert the full passage text here only once]
+
+ID: 1
+QUESTION: [Question 1 text]
 A) [Choice A]
 B) [Choice B]
 C) [Choice C]
 D) [Choice D]
-CORRECT: [A/B/C/D]
-EXPLANATION: [Step-by-step solution based on reviewer notes]
+CORRECT: A
+EXPLANATION: [Explanation referencing the passage text]
+
+ID: 2
+QUESTION: [Question 2 text]
+A) [Choice A]
+B) [Choice B]
+C) [Choice C]
+D) [Choice D]
+CORRECT: B
+EXPLANATION: [Explanation referencing the passage text]
 ---
 
 Rules:
 - Exactly 4 choices (A, B, C, D) per question.
 - Only one correct answer.
-- Keep the exact tags (ID:, SUBJECT:, TOPIC:, QUESTION:, A), B), C), D), CORRECT:, EXPLANATION:).
-- No extra conversational preamble outside the blocks so it can be pasted directly into the question bank.`;
+- Keep the exact tags (UNIVERSITY:, SUBJECT:, PASSAGE:, ID:, QUESTION:, A), B), C), D), CORRECT:, EXPLANATION:).
+- Separate passage groups with "---".
+- No extra conversational text before or after the output blocks so it can be parsed directly into the question bank.`;
+    }
+
+    return `CRITICAL INSTRUCTION: Generate practice questions strictly base ONLY from the sources, reviewers, and study materials that are currently uploaded in this NotebookLM. Do not use outside knowledge or unverified facts. Follow the format strictly with no extra conversational text, commentary, or greetings. Total questions must equal exactly ${count}. No repeating of questions. Every single question must have a unique ID.
+
+Format each question block exactly like this with a blank line and "---" separator between each question:
+
+UNIVERSITY: ${uniUpper}
+ID: q_${targetUni}_${subjDisplay}_1001
+SUBJECT: ${subjDisplay}
+TOPIC: [Topic title from uploaded reviewer notes]
+QUESTION: [Question text. Use KaTeX notation for mathematical expressions, e.g. $2x + 5 = 15$ or $\\frac{a}{b}$]
+A) [Choice A]
+B) [Choice B]
+C) [Choice C]
+D) [Choice D]
+CORRECT: A
+EXPLANATION: [Step-by-step solution based strictly on reviewer sources]
+DIAGRAM: { "shape": "rightTriangle", "vertices": ["A","B","C"], "sides": {"AB":"5","BC":"12","AC":"?"}, "angles": {"B":"30°"}, "show": ["vertices","sides","angles","rightAngleMark"] } // ONLY include if the question has a geometric shape, otherwise omit the DIAGRAM line completely
+---
+
+Rules:
+- Exactly 4 choices (A, B, C, D) per question.
+- Only one correct answer.
+- Subject values: language_english | language_filipino | math | science | reading_english | reading_filipino | numerical_ability | logical_reasoning | abstract_reasoning | general_info
+- Put DIAGRAM only when there is a geometric diagram, otherwise DO NOT include the DIAGRAM line.
+- Put PASSAGE only when there is a passage, otherwise DO NOT include the PASSAGE line.
+- Strictly keep the exact tags (UNIVERSITY:, ID:, SUBJECT:, TOPIC:, QUESTION:, A), B), C), D), CORRECT:, EXPLANATION:).
+- Output exactly ${count} question blocks. No extra conversational text before or after so it imports directly.`;
   };
 
   const handleNotebookCopyAndOpen = () => {
-    const prompt = buildNotebookLMPrompt(notebookSubject, notebookCount);
+    const prompt = buildNotebookLMPrompt(universityId, notebookSubject, notebookCount);
     navigator.clipboard.writeText(prompt);
     setNotebookCopied(true);
     setTimeout(() => setNotebookCopied(false), 3000);
-    window.open(UPCAT_NOTEBOOK_URL, "_blank", "noopener,noreferrer");
+
+    const targetConfig = NOTEBOOK_URLS[universityId] || NOTEBOOK_URLS.upcat;
+    window.open(targetConfig.url, "_blank", "noopener,noreferrer");
   };
 
   const parseAndSaveNotebookText = () => {
@@ -600,95 +700,22 @@ Rules:
     }
 
     try {
-      const trimmed = notebookPasteText.trim();
-      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const res = addBankQuestions(parsed, universityId);
-          setNotebookPasteResult(res);
-          onQuestionsAdded();
-          setNotebookPasteText("");
-          return;
-        }
-      }
+      // Pass universityId as fallbackUniId so any questions route directly to the active university
+      const valid = parseRawQuestionBankText(notebookPasteText, universityId, notebookSubject);
 
-      const blocks = trimmed.split(/\n\s*---\s*\n|\n\s*={3,}\s*\n/);
-      const valid: BankQuestion[] = [];
-
-      for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
-        const block = blocks[blockIdx].trim();
-        if (!block) continue;
-
-        let id = "";
-        let subject = "";
-        let topic = "";
-        let passage = "";
-        let question = "";
-        let correctAnswer = "";
-        let explanation = "";
-        const choices: { id: string; text: string }[] = [];
-
-        const lines = block.split("\n");
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line) continue;
-
-          if (/^ID\s*:/i.test(line)) {
-            id = line.replace(/^ID\s*:/i, "").trim();
-          } else if (/^SUBJECT\s*:/i.test(line)) {
-            subject = line.replace(/^SUBJECT\s*:/i, "").trim();
-          } else if (/^TOPIC\s*:/i.test(line)) {
-            topic = line.replace(/^TOPIC\s*:/i, "").trim();
-          } else if (/^PASSAGE\s*:/i.test(line)) {
-            passage = line.replace(/^PASSAGE\s*:/i, "").trim();
-          } else if (/^QUESTION\s*:/i.test(line)) {
-            question = line.replace(/^QUESTION\s*:/i, "").trim();
-          } else if (/^[A-D]\s*[\)\.\:]\s*/i.test(line)) {
-            const letter = line[0].toUpperCase();
-            const text = line.replace(/^[A-D]\s*[\)\.\:]\s*/i, "").trim();
-            choices.push({ id: letter, text });
-          } else if (/^CORRECT\s*(?:ANSWER)?\s*:/i.test(line)) {
-            correctAnswer = line.replace(/^CORRECT\s*(?:ANSWER)?\s*:/i, "").trim();
-          } else if (/^EXPLANATION\s*:/i.test(line)) {
-            explanation = line.replace(/^EXPLANATION\s*:/i, "").trim();
-          }
-        }
-
-        if (!question && !passage) continue;
-        if (choices.length < 2) continue;
-
-        if (!id) {
-          id = `upcat_${notebookSubject}_${Date.now()}_${blockIdx}_${Math.floor(Math.random() * 1000)}`;
-        }
-
-        let fullText = question;
-        if (passage && question) fullText = `PASSAGE:\n${passage}\n\nQUESTION: ${question}`;
-        else if (passage) fullText = `PASSAGE:\n${passage}`;
-
-        const normalizedSubj = subject.toLowerCase().replace(/\s+/g, "_") || notebookSubject || "science";
-
-        valid.push({
-          id,
-          subject: normalizedSubj,
-          topic: topic || undefined,
-          text: fullText,
-          choices,
-          correctAnswer: (correctAnswer || choices[0]?.id || "A").toUpperCase(),
-          explanation: explanation || "",
-        });
-      }
-
-      if (valid.length === 0) {
+      if (!valid || valid.length === 0) {
         setNotebookPasteError(
-          "Could not detect question blocks. Please make sure the output contains 'QUESTION:', choices A, B, C, D, and 'CORRECT:' separated by '---'."
+          "Could not detect question blocks. Please make sure the output contains 'QUESTION:', choices A, B, C, D, and 'CORRECT:'."
         );
         return;
       }
 
       const res = addBankQuestions(valid, universityId);
       setNotebookPasteResult(res);
-      onQuestionsAdded();
-      setNotebookPasteText("");
+      if (res.added > 0) {
+        onQuestionsAdded();
+        setNotebookPasteText("");
+      }
     } catch (err: any) {
       setNotebookPasteError(`Parsing error: ${err.message || "Invalid format"}`);
     }
@@ -725,88 +752,9 @@ Rules:
     }
 
     try {
-      // 1. Try JSON Array first
-      const trimmed = textToParse.trim();
-      if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-        const parsed = JSON.parse(trimmed);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const res = addBankQuestions(parsed, universityId);
-          setPasteResult(res);
-          onQuestionsAdded();
-          setPasteText("");
-          return;
-        }
-      }
+      const valid = parseRawQuestionBankText(textToParse, universityId);
 
-      // 2. Parse plain text format
-      const blocks = textToParse.split(/\n\s*---\s*\n|\n\s*={3,}\s*\n/);
-      const valid: BankQuestion[] = [];
-
-      for (let blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
-        const block = blocks[blockIdx].trim();
-        if (!block) continue;
-
-        let id = "";
-        let subject = "";
-        let topic = "";
-        let passage = "";
-        let question = "";
-        let correctAnswer = "";
-        let explanation = "";
-        const choices: { id: string; text: string }[] = [];
-
-        const lines = block.split("\n");
-        for (const rawLine of lines) {
-          const line = rawLine.trim();
-          if (!line) continue;
-
-          if (/^ID\s*:/i.test(line)) {
-            id = line.replace(/^ID\s*:/i, "").trim();
-          } else if (/^SUBJECT\s*:/i.test(line)) {
-            subject = line.replace(/^SUBJECT\s*:/i, "").trim();
-          } else if (/^TOPIC\s*:/i.test(line)) {
-            topic = line.replace(/^TOPIC\s*:/i, "").trim();
-          } else if (/^PASSAGE\s*:/i.test(line)) {
-            passage = line.replace(/^PASSAGE\s*:/i, "").trim();
-          } else if (/^QUESTION\s*:/i.test(line)) {
-            question = line.replace(/^QUESTION\s*:/i, "").trim();
-          } else if (/^[A-D]\s*[\)\.\:]\s*/i.test(line)) {
-            const letter = line[0].toUpperCase();
-            const text = line.replace(/^[A-D]\s*[\)\.\:]\s*/i, "").trim();
-            choices.push({ id: letter, text });
-          } else if (/^CORRECT\s*(?:ANSWER)?\s*:/i.test(line)) {
-            correctAnswer = line.replace(/^CORRECT\s*(?:ANSWER)?\s*:/i, "").trim();
-          } else if (/^EXPLANATION\s*:/i.test(line)) {
-            explanation = line.replace(/^EXPLANATION\s*:/i, "").trim();
-          }
-        }
-
-        if (!question && !passage) continue;
-        if (choices.length < 2) continue;
-
-        if (!id) {
-          id = `q_custom_${Date.now()}_${blockIdx}_${Math.floor(Math.random() * 1000)}`;
-        }
-
-        let fullText = question;
-        if (passage && question) fullText = `PASSAGE:\n${passage}\n\nQUESTION: ${question}`;
-        else if (passage) fullText = `PASSAGE:\n${passage}`;
-
-        // Normalize subject
-        const normalizedSubj = subject.toLowerCase().replace(/\s+/g, "_") || availableSubjects[0]?.id || "science";
-
-        valid.push({
-          id,
-          subject: normalizedSubj,
-          topic: topic || undefined,
-          text: fullText,
-          choices,
-          correctAnswer: (correctAnswer || choices[0]?.id || "A").toUpperCase(),
-          explanation: explanation || "",
-        });
-      }
-
-      if (valid.length === 0) {
+      if (!valid || valid.length === 0) {
         setPasteError("Could not parse input. Please ensure it follows the format (ID:, SUBJECT:, QUESTION:, A), B), C), D), CORRECT:, EXPLANATION:) or a JSON array.");
         return;
       }
@@ -847,9 +795,15 @@ Rules:
       .map(([subj, count]) => `${count} ${subj}`)
       .join(", ");
 
-    setSuccessMessage(
-      `Successfully added ${result.added} question${result.added !== 1 ? "s" : ""} (${breakdownText}) to your ${universityId.toUpperCase()} bank!${result.skipped > 0 ? ` (${result.skipped} duplicates skipped)` : ""}`
-    );
+    if (result.added > 0) {
+      setSuccessMessage(
+        `Successfully added ${result.added} question${result.added !== 1 ? "s" : ""} (${breakdownText}) to your ${universityId.toUpperCase()} bank!${result.skipped > 0 ? ` (${result.skipped} repeated from previous quizzes/sessions skipped)` : ""}`
+      );
+    } else {
+      setSuccessMessage(
+        `All ${result.skipped} question${result.skipped !== 1 ? "s were" : " was"} skipped because they have already appeared in your previous quizzes or past sessions. (Turn on 'Allow duplicate/repeated questions' in Settings to allow them).`
+      );
+    }
 
     if (source === "extracted") {
       setExtractedQuestions([]);
@@ -923,8 +877,44 @@ Rules:
         </div>
       </div>
 
-      {/* ─── TAB NAVIGATION BAR ─── */}
-      <div className="flex border-b bg-muted/10 px-4 pt-1 overflow-x-auto no-scrollbar shrink-0">
+      {/* ─── TAB NAVIGATION BAR WITH MINIMALIST SCROLLBARS ─── */}
+      <style>{`
+        .custom-studio-scrollbar::-webkit-scrollbar {
+          width: 5px;
+          height: 5px;
+        }
+        .custom-studio-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-studio-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(156, 163, 175, 0.25);
+          border-radius: 999px;
+        }
+        .custom-studio-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(156, 163, 175, 0.45);
+        }
+        .custom-studio-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: rgba(156, 163, 175, 0.25) transparent;
+        }
+      `}</style>
+      <div
+        ref={setTabsRef}
+        className="flex border-b bg-muted/10 px-4 pt-1 overflow-x-auto custom-studio-scrollbar shrink-0"
+      >
+        <button
+          onClick={() => setActiveTab("notebooklm")}
+          className={cn(
+            "flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all whitespace-nowrap cursor-pointer",
+            activeTab === "notebooklm"
+              ? "border-primary text-primary bg-primary/5 rounded-t-lg"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
+          )}
+        >
+          <BookOpen className="h-4 w-4 text-blue-500" />
+          <span>NotebookLM</span>
+        </button>
+
         <button
           onClick={() => setActiveTab("prompt_paste")}
           className={cn(
@@ -934,10 +924,10 @@ Rules:
               : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
           )}
         >
-          <Wand2 className="h-4 w-4 text-blue-500" />
-          <span>AI Prompt & Paste</span>
+          <Bot className="h-4 w-4 text-indigo-500" />
+          <span>Generate using external AI</span>
         </button>
-
+ 
         <button
           onClick={() => setActiveTab("manual")}
           className={cn(
@@ -948,9 +938,9 @@ Rules:
           )}
         >
           <Edit3 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-          <span>Manual Question Entry</span>
+          <span>Create questions manually</span>
         </button>
-
+ 
         <button
           onClick={() => setActiveTab("generate")}
           className={cn(
@@ -961,9 +951,9 @@ Rules:
           )}
         >
           <Sparkles className="h-4 w-4 text-amber-500" />
-          <span>AI Generate by Subject</span>
+          <span>Generate using AI</span>
         </button>
-
+ 
         <button
           onClick={() => setActiveTab("pdf")}
           className={cn(
@@ -974,15 +964,28 @@ Rules:
           )}
         >
           <FileText className="h-4 w-4 text-muted-foreground" />
-          <span>Scan PDF / Exam (AI)</span>
+          <span>Scan PDF</span>
           <span className="ml-1 text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
             Beta · Not working yet
           </span>
         </button>
+ 
+        <button
+          onClick={() => setActiveTab("banned")}
+          className={cn(
+            "flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold border-b-2 transition-all whitespace-nowrap cursor-pointer",
+            activeTab === "banned"
+              ? "border-primary text-primary bg-primary/5 rounded-t-lg"
+              : "border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/30"
+          )}
+        >
+          <span className="text-xs">🚫</span>
+          <span>Block questions</span>
+        </button>
       </div>
-
-      {/* ─── MODAL BODY / SCROLLABLE CONTENT ─── */}
-      <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5">
+ 
+      {/* ─── MODAL BODY / SCROLLABLE CONTENT WITH MINIMALIST SCROLLBAR ─── */}
+      <div className="p-4 sm:p-6 overflow-y-auto custom-studio-scrollbar flex-1 space-y-5">
         {successMessage && (
           <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs sm:text-sm font-medium flex items-center gap-2.5 animate-in fade-in">
             <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -991,232 +994,170 @@ Rules:
         )}
 
         {/* ═════════════════════════════════════════════════════════════════════════ */}
-        {/* ─── TAB 1: AI PROMPT & PASTE ─── */}
+        {/* ─── TAB 1: NOTEBOOKLM (UNIVERSITY REVIEWERS) ─── */}
         {/* ═════════════════════════════════════════════════════════════════════════ */}
-        {activeTab === "prompt_paste" && (
+        {activeTab === "notebooklm" && (
           <div className="space-y-4">
-            <div className="flex border-b bg-muted/20 p-1 rounded-xl gap-1">
-              <button
-                type="button"
-                onClick={() => setPromptSubTab("notebooklm")}
-                className={cn(
-                  "flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                  promptSubTab === "notebooklm"
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <BookOpen className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                <span>Use NotebookLM</span>
-                {universityId === "upcat" ? (
-                  <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                    UPCAT Active
-                  </span>
-                ) : (
-                  <span className="text-[10px] uppercase font-bold px-1.5 py-0.2 rounded-full bg-muted text-muted-foreground">
-                    Beta
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPromptSubTab("generate_prompt")}
-                className={cn(
-                  "flex-1 py-1.5 px-3 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5",
-                  promptSubTab === "generate_prompt"
-                    ? "bg-background text-foreground shadow-xs"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Wand2 className="h-3.5 w-3.5 text-primary shrink-0" />
-                <span>AI Prompt Generator</span>
-              </button>
-            </div>
+            {/* ─── NOTEBOOKLM (UNIVERSITY REVIEWERS) ─── */}
+            <div className="space-y-4">
+              {/* Step 1: Command & Configuration */}
+                {(() => {
+                  const currentCmd = getNotebookShorthandCommand(universityId, notebookSubject, notebookCount);
+                  const uniUpper = universityId.toUpperCase();
+                  const targetConfig = NOTEBOOK_URLS[universityId] || NOTEBOOK_URLS.upcat;
 
-            {/* ─── SUBTAB: NOTEBOOKLM (UPCAT) ─── */}
-            {promptSubTab === "notebooklm" && (
-              <div className="space-y-4">
-                {/* Integration Header Card */}
-                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/25 space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="h-7 w-7 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
-                        <BookOpen className="h-4 w-4" />
-                      </div>
-                      <span className="font-bold text-foreground text-sm">UPCAT Google NotebookLM Reviewer</span>
-                      <span className="text-[10px] uppercase font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
-                        Connected · Active
-                      </span>
-                    </div>
-
-                    <a
-                      href={UPCAT_NOTEBOOK_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-semibold hover:underline bg-background/80 px-3 py-1 rounded-lg border border-blue-500/30 shadow-xs cursor-pointer w-fit"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" />
-                      <span>Open Reviewer NotebookLM</span>
-                    </a>
-                  </div>
-
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Connected to your Google Notebook with uploaded UPCAT reviewers, topic notes, and sample mock exams. Simply specify your target subject and number of items (e.g. <strong className="text-foreground">math 20</strong>), click <strong className="text-foreground">Copy Command & Open</strong>, and paste the output back here!
-                  </p>
-                </div>
-
-                {universityId !== "upcat" && (
-                  <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
-                    <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold">UPCAT Beta Test:</span> This Reviewer Notebook is currently configured specifically for UPCAT reviewers. Notebooks for other universities will be added soon. You can still test it out or use the <strong>AI Prompt Generator</strong> tab for custom prompts!
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 1: Command & Configuration */}
-                <div className="p-4 rounded-xl border bg-card/60 space-y-3.5 shadow-xs">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="space-y-0.5">
-                      <Label className="text-xs font-bold text-foreground">
-                        Step 1: Type <span className="font-mono text-primary">&lt;subject&gt; &lt;no. of items&gt;</span> or select shortcuts:
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Fast command line: type e.g. <code className="bg-muted px-1.5 py-0.5 rounded text-foreground font-mono">math 20</code>, <code className="bg-muted px-1.5 py-0.5 rounded text-foreground font-mono">science 15</code>, or <code className="bg-muted px-1.5 py-0.5 rounded text-foreground font-mono">language 25</code>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="relative">
-                    <Input
-                      value={notebookCmd}
-                      onChange={(e) => handleQuickCmdChange(e.target.value)}
-                      placeholder='e.g. "math 20", "science 15", "language 25", "reading 10"'
-                      className="h-10 text-xs font-mono bg-background text-foreground pr-10"
-                    />
-                    <Sparkles className="h-4 w-4 text-primary/60 absolute right-3 top-3 pointer-events-none" />
-                  </div>
-
-                  {/* Subject Shortcut Pills */}
-                  <div className="space-y-1.5">
-                    <span className="text-[11px] font-semibold text-muted-foreground">Subject:</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {availableSubjects.map((s) => {
-                        const isSelected = notebookSubject === s.id;
-                        return (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => {
-                              setNotebookSubject(s.id);
-                              setNotebookCmd(`${s.id} ${notebookCount}`);
-                            }}
-                            className={cn(
-                              "px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer",
-                              isSelected
-                                ? "bg-primary text-primary-foreground border-primary shadow-xs"
-                                : "bg-muted/40 text-muted-foreground border-border hover:text-foreground hover:bg-muted"
-                            )}
+                  return (
+                    <div className="p-4 rounded-xl border bg-card/60 space-y-3.5 shadow-xs">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="space-y-0.5">
+                          <Label className="text-xs font-bold text-foreground">
+                            Step 1: Click to copy command or customize shortcuts:
+                          </Label>
+                          <p className="text-[11px] text-muted-foreground">
+                            Click anywhere on the command button to copy your Notebook prompt.
+                          </p>
+                        </div>
+                        {targetConfig.active && (
+                          <a
+                            href={targetConfig.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1.5 text-xs text-blue-600 dark:text-blue-400 font-semibold hover:underline bg-background/80 px-2.5 py-1 rounded-lg border border-blue-500/30 shadow-xs cursor-pointer"
                           >
-                            {s.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                            <ExternalLink className="h-3.5 w-3.5" />
+                            <span>Open {uniUpper} NotebookLM</span>
+                          </a>
+                        )}
+                      </div>
 
-                  {/* Quantity Shortcut Chips */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-muted-foreground">Number of questions:</span>
-                      <div className="flex items-center gap-1.5">
-                        <DirectNumberInput
-                          value={notebookCount}
-                          min={1}
-                          max={200}
-                          onChange={(val) => {
-                            setNotebookCount(val);
-                            setNotebookCmd(`${notebookSubject} ${val}`);
-                          }}
-                        />
-                        <span className="text-[11px] text-muted-foreground">items</span>
+                      {/* Click to Copy Command Banner / Button */}
+                      <button
+                        type="button"
+                        id="btn-copy-notebook-command"
+                        onClick={() => handleCopyCommandOnly(currentCmd)}
+                        title="Click to copy command"
+                        className={cn(
+                          "w-full group relative flex items-center justify-between gap-3 p-3.5 rounded-xl border transition-all cursor-pointer text-left font-mono",
+                          commandCopied
+                            ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-800 dark:text-emerald-200 shadow-xs"
+                            : "bg-background/90 hover:bg-muted/40 border-primary/30 hover:border-primary/60 text-foreground shadow-xs"
+                        )}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={cn(
+                            "h-7 w-7 rounded-lg flex items-center justify-center shrink-0 transition-colors",
+                            commandCopied ? "bg-emerald-500/20 text-emerald-600" : "bg-primary/10 text-primary"
+                          )}>
+                            <Sparkles className="h-4 w-4" />
+                          </div>
+                          <div className="truncate">
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
+                              Shorthand Command (Click to Copy)
+                            </span>
+                            <span className="text-sm font-bold tracking-wide">
+                              {currentCmd}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-sans font-semibold transition-all">
+                          {commandCopied ? (
+                            <>
+                              <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                              <span className="text-emerald-700 dark:text-emerald-300 font-bold">Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4 text-primary group-hover:scale-110 transition-transform" />
+                              <span className="text-foreground">Copy Command</span>
+                            </>
+                          )}
+                        </div>
+                      </button>
+
+                      {/* Subject Shortcut Pills */}
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-semibold text-muted-foreground">Subject:</span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {availableSubjects.map((s) => {
+                            const isSelected = notebookSubject === s.id;
+                            return (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => setNotebookSubject(s.id)}
+                                className={cn(
+                                  "px-3 py-1.5 text-xs font-semibold rounded-lg border transition-all cursor-pointer",
+                                  isSelected
+                                    ? "bg-primary text-primary-foreground border-primary shadow-xs"
+                                    : "bg-muted/40 text-muted-foreground border-border hover:text-foreground hover:bg-muted"
+                                )}
+                              >
+                                {s.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Quantity Shortcut Chips */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-semibold text-muted-foreground">Number of questions:</span>
+                          <div className="flex items-center gap-1.5">
+                            <DirectNumberInput
+                              value={notebookCount}
+                              min={1}
+                              max={200}
+                              onChange={(val) => setNotebookCount(val)}
+                            />
+                            <span className="text-[11px] text-muted-foreground">items</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {[3, 5, 10, 15, 20, 25, 30, 50].map((count) => (
+                            <button
+                              key={count}
+                              type="button"
+                              onClick={() => setNotebookCount(count)}
+                              className={cn(
+                                "px-2.5 py-1 text-xs font-semibold rounded-md border transition-all cursor-pointer",
+                                notebookCount === count
+                                  ? "bg-secondary text-secondary-foreground border-secondary-foreground/30 font-bold"
+                                  : "bg-background text-muted-foreground border-border hover:text-foreground"
+                              )}
+                            >
+                              {count} items
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Action Button: Copy Full Prompt & Open */}
+                      <div className="pt-1">
+                        <Button
+                          type="button"
+                          id="btn-copy-and-open-notebook"
+                          onClick={handleNotebookCopyAndOpen}
+                          className="w-full h-10 text-xs font-bold gap-2 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm transition-all"
+                        >
+                          {notebookCopied ? (
+                            <>
+                              <Check className="h-4 w-4 text-emerald-300" />
+                              <span>Copied Full Prompt! Opening {uniUpper} NotebookLM...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-4 w-4" />
+                              <span>Copy Full Prompt & Open {uniUpper} NotebookLM</span>
+                              <ExternalLink className="h-3.5 w-3.5 opacity-80 ml-0.5" />
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {[5, 10, 15, 20, 25, 30, 50].map((count) => (
-                        <button
-                          key={count}
-                          type="button"
-                          onClick={() => {
-                            setNotebookCount(count);
-                            setNotebookCmd(`${notebookSubject} ${count}`);
-                          }}
-                          className={cn(
-                            "px-2.5 py-1 text-xs font-semibold rounded-md border transition-all cursor-pointer",
-                            notebookCount === count
-                              ? "bg-secondary text-secondary-foreground border-secondary-foreground/30 font-bold"
-                              : "bg-background text-muted-foreground border-border hover:text-foreground"
-                          )}
-                        >
-                          {count} items
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Target Preview */}
-                  <div className="p-2.5 rounded-lg bg-muted/40 border text-xs flex items-center justify-between flex-wrap gap-2">
-                    <span className="text-muted-foreground">
-                      Target: <strong className="text-foreground">{notebookCount} questions</strong> for{" "}
-                      <strong className="text-primary">
-                        {availableSubjects.find((s) => s.id === notebookSubject)?.label || notebookSubject}
-                      </strong>{" "}
-                      from UPCAT Reviewer Notebook
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowNotebookPromptDetails((prev) => !prev)}
-                      className="text-[11px] text-primary hover:underline font-semibold cursor-pointer"
-                    >
-                      {showNotebookPromptDetails ? "Hide Prompt Details" : "View Prompt Details"}
-                    </button>
-                  </div>
-
-                  {showNotebookPromptDetails && (
-                    <div className="space-y-1.5 pt-1 animate-in fade-in">
-                      <Label className="text-[11px] text-muted-foreground font-semibold">
-                        Prompt dispatched to Google NotebookLM:
-                      </Label>
-                      <textarea
-                        readOnly
-                        value={buildNotebookLMPrompt(notebookSubject, notebookCount)}
-                        className="w-full h-28 rounded-xl border bg-muted/20 p-2.5 text-[11px] font-mono text-foreground focus:outline-none resize-y"
-                      />
-                    </div>
-                  )}
-
-                  {/* Action Button: Copy & Open */}
-                  <div className="pt-1">
-                    <Button
-                      type="button"
-                      onClick={handleNotebookCopyAndOpen}
-                      className="w-full h-10 text-xs font-bold gap-2 bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-sm transition-all"
-                    >
-                      {notebookCopied ? (
-                        <>
-                          <Check className="h-4 w-4 text-emerald-300" />
-                          <span>Copied Command! Opening UPCAT NotebookLM...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-4 w-4" />
-                          <span>Copy Command & Open UPCAT NotebookLM</span>
-                          <ExternalLink className="h-3.5 w-3.5 opacity-80 ml-0.5" />
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
+                  );
+                })()}
 
                 {/* Step 2: Paste Output & Save */}
                 <div className="p-4 rounded-xl border bg-card/60 space-y-3 shadow-xs">
@@ -1225,14 +1166,14 @@ Rules:
                       Step 2: Paste output from NotebookLM & Save to Bank:
                     </Label>
                     <p className="text-[11px] text-muted-foreground">
-                      After NotebookLM finishes responding, copy the text and paste it below. KaTeX math formulas ($...$) and question blocks will be automatically formatted.
+                      After NotebookLM finishes responding, copy the text and paste it below. KaTeX math formulas ($...$), geometric diagrams, reading passages, and question blocks will be automatically formatted and routed to your {universityId.toUpperCase()} question bank.
                     </p>
                   </div>
 
                   <textarea
                     value={notebookPasteText}
                     onChange={(e) => setNotebookPasteText(e.target.value)}
-                    placeholder={`ID: upcat-${notebookSubject}-1\nSUBJECT: ${notebookSubject}\nTOPIC: Reviewer Topic\nQUESTION: What is the solution...\nA) 10\nB) 15\nC) 20\nD) 25\nCORRECT: B\nEXPLANATION: Step-by-step solution from reviewer notes.\n\n---\n\n(Or paste standard JSON array)`}
+                    placeholder={`UNIVERSITY: ${universityId.toUpperCase()}\nID: q_${universityId}_${notebookSubject}_1001\nSUBJECT: ${notebookSubject}\nTOPIC: Reviewer Topic\nQUESTION: What is the solution...\nA) 10\nB) 15\nC) 20\nD) 25\nCORRECT: B\nEXPLANATION: Step-by-step solution from reviewer notes.\n\n---\n\n(Or paste standard reading comprehension passage block / JSON array)`}
                     rows={6}
                     className="w-full text-xs font-mono rounded-xl border bg-background p-3 text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-y"
                   />
@@ -1245,12 +1186,38 @@ Rules:
                   )}
 
                   {notebookPasteResult && (
-                    <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                      <span>
-                        Successfully added {notebookPasteResult.added} questions to your UPCAT bank!
-                        {notebookPasteResult.skipped > 0 && ` (${notebookPasteResult.skipped} duplicates skipped)`}
-                      </span>
+                    <div
+                      className={cn(
+                        "p-3.5 rounded-xl border text-xs font-semibold flex items-start gap-2.5 animate-in fade-in",
+                        notebookPasteResult.added > 0
+                          ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-700 dark:text-emerald-300"
+                          : "bg-amber-500/15 border-amber-500/30 text-amber-800 dark:text-amber-200"
+                      )}
+                    >
+                      {notebookPasteResult.added > 0 ? (
+                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="space-y-0.5">
+                        {notebookPasteResult.added > 0 ? (
+                          <>
+                            <div>
+                              Successfully added {notebookPasteResult.added} question{notebookPasteResult.added !== 1 ? "s" : ""} to your {universityId.toUpperCase()} bank!
+                              {notebookPasteResult.skipped > 0 && ` (${notebookPasteResult.skipped} repeated from previous quizzes/sessions skipped)`}
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <div>
+                              All {notebookPasteResult.skipped} question{notebookPasteResult.skipped !== 1 ? "s were" : " was"} identified as already tested in previous quizzes or past sessions and skipped.
+                            </div>
+                            <p className="text-[11px] font-normal opacity-90">
+                              To allow duplicate questions anyway, turn on "Allow duplicate/repeated questions" in Settings.
+                            </p>
+                          </>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -1262,207 +1229,266 @@ Rules:
                       className="font-semibold text-xs h-9 px-5 gap-2 bg-primary hover:bg-primary/90 cursor-pointer"
                     >
                       <Plus className="h-4 w-4" />
-                      Save Questions to UPCAT Question Bank
+                      Save Questions to {universityId.toUpperCase()} Question Bank
                     </Button>
                   </div>
                 </div>
               </div>
-            )}
-
-            {promptSubTab === "generate_prompt" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <Label className="text-xs font-semibold">Select subjects & question quantities:</Label>
-                    <div className="flex items-center gap-1.5">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          setGenSelectedSubjects(
-                            availableSubjects.reduce((acc, s) => ({ ...acc, [s.id]: true }), {})
-                          )
-                        }
-                        className="h-6 text-[11px] px-2.5 font-semibold text-primary border-primary/30 hover:bg-primary/10 cursor-pointer"
-                      >
-                        Select All
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() =>
-                          setGenSelectedSubjects(
-                            availableSubjects.reduce((acc, s) => ({ ...acc, [s.id]: false }), {})
-                          )
-                        }
-                        className="h-6 text-[11px] px-2 text-muted-foreground hover:text-foreground cursor-pointer"
-                      >
-                        Deselect All
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {availableSubjects.map((s) => {
-                      const isSelected = !!genSelectedSubjects[s.id];
-                      return (
-                        <div
-                          key={s.id}
-                          className={cn(
-                            "flex items-center justify-between p-2.5 rounded-xl border text-xs transition-colors",
-                            isSelected ? "bg-card border-primary/30" : "bg-muted/20 opacity-60"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              checked={isSelected}
-                              onCheckedChange={(checked) =>
-                                setGenSelectedSubjects((prev) => ({ ...prev, [s.id]: !!checked }))
-                              }
-                            />
-                            <span className="font-semibold">{s.label}</span>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <DirectNumberInput
-                              value={genItemCounts[s.id] ?? 10}
-                              disabled={!isSelected}
-                              min={1}
-                              max={200}
-                              onChange={(val) =>
-                                setGenItemCounts((prev) => ({
-                                  ...prev,
-                                  [s.id]: val,
-                                }))
-                              }
-                            />
-                            <span className="text-[11px] text-muted-foreground">items</span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <Button onClick={buildPrompt} className="w-full gap-2 text-xs font-semibold h-9">
-                  <Sparkles className="h-4 w-4 text-amber-400" />
-                  Generate Prompt for External AI Chatbot
-                </Button>
-
-                {generatedPrompt && (
-                  <div className="space-y-2.5 pt-2 border-t">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-foreground">Custom Generated Prompt</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={copyPrompt}
-                        className="gap-1.5 h-7 text-xs cursor-pointer"
-                      >
-                        {copied ? (
-                          <>
-                            <Check className="h-3.5 w-3.5 text-emerald-600" />
-                            Copied!
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            Copy Prompt
-                          </>
-                        )}
-                      </Button>
-                    </div>
-
-                    <textarea
-                      value={customPrompt}
-                      onChange={(e) => setCustomPrompt(e.target.value)}
-                      className="w-full h-36 rounded-xl border bg-muted/30 p-3 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-y"
-                    />
-
-                    <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-[11px] text-muted-foreground space-y-1">
-                      <p className="font-semibold text-foreground">How to use:</p>
-                      <p>1. Click <strong>Copy Prompt</strong> above.</p>
-                      <p>2. Open <a href="https://gemini.google.com" target="_blank" rel="noreferrer" className="text-primary underline">Google Gemini</a> or <a href="https://chat.deepseek.com" target="_blank" rel="noreferrer" className="text-primary underline">DeepSeek</a> and paste it.</p>
-                      <p>3. Copy the output questions from the AI, then paste them into <strong>Step 2: Paste Raw Questions</strong> below to save to your question bank!</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Step 2: Embedded Paste Raw Questions for All Universities */}
-                <div className="pt-3 border-t space-y-3">
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <Label className="text-xs font-bold text-foreground">
-                        Step 2: Paste Raw Questions or Upload File (All Universities)
-                      </Label>
-                      <p className="text-[11px] text-muted-foreground">
-                        Paste question blocks or JSON array from Gemini, DeepSeek, or ChatGPT.
-                      </p>
-                    </div>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => pasteFileInputRef.current?.click()}
-                      className="h-7 text-xs gap-1.5 cursor-pointer"
-                    >
-                      <Upload className="h-3.5 w-3.5" />
-                      Upload .json / .txt
-                    </Button>
-                    <input
-                      ref={pasteFileInputRef}
-                      type="file"
-                      accept=".json,.txt,application/json,text/plain"
-                      className="hidden"
-                      onChange={handlePasteFileUpload}
-                    />
-                  </div>
-
-                  <textarea
-                    value={pasteText}
-                    onChange={(e) => setPasteText(e.target.value)}
-                    placeholder={`ID: q1\nSUBJECT: math\nTOPIC: Algebra\nQUESTION: Solve for x: $2x + 8 = 20$\nA) 4\nB) 6\nC) 8\nD) 10\nCORRECT: B\nEXPLANATION: Subtract 8 from both sides: 2x = 12 -> x = 6.\n\n---\n\nOr paste JSON: [{"id":"q1","subject":"math","text":"...","choices":[{"id":"A","text":"..."},...],"correctAnswer":"A"}]`}
-                    rows={8}
-                    className="w-full text-xs font-mono rounded-xl border bg-background p-3 text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-y"
-                  />
-
-                  {pasteError && (
-                    <div className="p-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 shrink-0" />
-                      <span>{pasteError}</span>
-                    </div>
-                  )}
-
-                  {pasteResult && (
-                    <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-in fade-in">
-                      <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                      <span>
-                        Successfully added {pasteResult.added} question{pasteResult.added !== 1 ? "s" : ""}!
-                        {pasteResult.skipped > 0 && ` (${pasteResult.skipped} duplicates skipped)`}
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end pt-1">
-                    <Button
-                      type="button"
-                      onClick={() => parseAndSavePaste(pasteText)}
-                      disabled={!pasteText.trim()}
-                      className="font-semibold text-xs h-9 px-5 gap-2 bg-primary hover:bg-primary/90 cursor-pointer"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Save Questions to Bank
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
         {/* ═════════════════════════════════════════════════════════════════════════ */}
-        {/* ─── TAB 2: MANUAL QUESTION ENTRY ─── */}
+        {/* ─── TAB 2: GENERATE USING EXTERNAL AI (GEMINI / DEEPSEEK / CHATGPT) ─── */}
+        {/* ═════════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "prompt_paste" && (
+          <div className="space-y-5">
+            {/* Step 1: Select Subjects & Question Counts */}
+            <div className="p-4 rounded-xl border bg-card/60 space-y-4 shadow-xs">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-primary" />
+                    Step 1: Select Subjects & Question Counts
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Choose which subjects to include and set item counts for your {universityId.toUpperCase()} prompt.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px] px-2.5 rounded-lg cursor-pointer"
+                    onClick={() => {
+                      const allSelected = availableSubjects.every((s) => genSelectedSubjects[s.id]);
+                      setGenSelectedSubjects(
+                        availableSubjects.reduce((acc, s) => ({ ...acc, [s.id]: !allSelected }), {})
+                      );
+                    }}
+                  >
+                    {availableSubjects.every((s) => genSelectedSubjects[s.id]) ? "Deselect All" : "Select All"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Subject Grid with Checkboxes & Item Counts */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {availableSubjects.map((subject) => {
+                  const isSelected = !!genSelectedSubjects[subject.id];
+                  const count = genItemCounts[subject.id] || 10;
+                  return (
+                    <div
+                      key={subject.id}
+                      onClick={() => {
+                        setGenSelectedSubjects((prev) => ({
+                          ...prev,
+                          [subject.id]: !prev[subject.id],
+                        }));
+                      }}
+                      className={cn(
+                        "flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer select-none",
+                        isSelected
+                          ? "bg-primary/10 border-primary/50 text-foreground shadow-xs"
+                          : "bg-card border-border text-foreground hover:bg-muted/30 hover:border-primary/30"
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}}
+                          className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40 pointer-events-none"
+                        />
+                        <span className="text-xs font-semibold text-foreground">{subject.label}</span>
+                      </div>
+
+                      <div
+                        className="flex items-center gap-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <DirectNumberInput
+                          min={1}
+                          max={100}
+                          value={count}
+                          disabled={!isSelected}
+                          onChange={(val) =>
+                            setGenItemCounts((prev) => ({
+                              ...prev,
+                              [subject.id]: val,
+                            }))
+                          }
+                          className="w-12 h-6 text-xs font-semibold"
+                        />
+                        <span className="text-[11px] font-medium text-foreground/80">items</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <Button
+                type="button"
+                onClick={buildPrompt}
+                className="w-full h-9 text-xs font-semibold gap-2 bg-primary hover:bg-primary/90 cursor-pointer"
+              >
+                <Sparkles className="h-4 w-4" />
+                Generate {universityId.toUpperCase()} Calibration Prompt
+              </Button>
+            </div>
+
+            {/* Step 2: Generated Prompt & External AI Launch Shortcuts */}
+            {generatedPrompt && (
+              <div className="p-4 rounded-xl border bg-card/60 space-y-3.5 shadow-xs animate-in fade-in">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="space-y-0.5">
+                    <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                      <Copy className="h-3.5 w-3.5 text-primary" />
+                      Step 2: Copy Prompt & Open External AI
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Click copy below, then paste into your preferred AI chatbot:
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={copied ? "default" : "outline"}
+                    onClick={copyPrompt}
+                    className="h-7 text-xs font-semibold px-3 gap-1.5 cursor-pointer"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-600" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5" />
+                        <span>Copy Prompt</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {/* External Chatbot Quick Links */}
+                <div className="flex items-center gap-2 flex-wrap pt-1">
+                  <a
+                    href="https://gemini.google.com/app"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-blue-500/30 bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    <span>Open Google Gemini</span>
+                  </a>
+                  <a
+                    href="https://chat.deepseek.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    <span>Open DeepSeek</span>
+                  </a>
+                  <a
+                    href="https://chatgpt.com/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    <ExternalLink className="h-3 w-3" />
+                    <span>Open ChatGPT</span>
+                  </a>
+                </div>
+
+                {/* Prompt Preview / Edit Box */}
+                <textarea
+                  className="w-full text-xs bg-muted/40 border rounded-xl p-3 font-mono min-h-[140px] max-h-[260px] resize-y focus:outline-none focus:ring-2 focus:ring-primary/40 leading-relaxed"
+                  value={customPrompt}
+                  onChange={(e) => setCustomPrompt(e.target.value)}
+                />
+              </div>
+            )}
+
+            {/* Step 3: Paste Output from AI Chatbot & Save */}
+            <div className="p-4 rounded-xl border bg-card/60 space-y-3.5 shadow-xs">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="space-y-0.5">
+                  <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Upload className="h-3.5 w-3.5 text-primary" />
+                    Step 3: Paste Questions & Save to Bank
+                  </Label>
+                  <p className="text-[11px] text-muted-foreground">
+                    Paste the response from Gemini, DeepSeek, or ChatGPT (Text format with ID:, SUBJECT:, etc., or JSON array).
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => pasteFileInputRef.current?.click()}
+                    className="h-7 text-xs font-semibold px-2.5 gap-1.5 cursor-pointer"
+                  >
+                    <Upload className="h-3.5 w-3.5" />
+                    <span>Upload .txt/.json</span>
+                  </Button>
+                  <input
+                    ref={pasteFileInputRef}
+                    type="file"
+                    accept=".json,.txt,application/json,text/plain"
+                    className="hidden"
+                    onChange={handlePasteFileUpload}
+                  />
+                </div>
+              </div>
+
+              <textarea
+                className="w-full min-h-[130px] rounded-xl border bg-background px-3 py-2 text-xs font-mono resize-y focus:outline-none focus:ring-2 focus:ring-primary/40 leading-relaxed"
+                placeholder={'Paste questions from AI chatbot here:\n\nID: q1\nSUBJECT: Language English\nTOPIC: Vocabulary\nQUESTION: What is the meaning of PERTINENT?\nA) relevant\nB) distant\nC) vague\nD) trivial\nCORRECT: A\nEXPLANATION: Pertinent means relevant or applicable to a particular matter.\n\n---\n\nOr paste JSON array: [{"id": "q1", ...}]'}
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+              />
+
+              {pasteError && (
+                <div className="flex items-start gap-2 text-xs text-destructive bg-destructive/10 border border-destructive/20 rounded-xl p-3">
+                  <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div className="whitespace-pre-wrap leading-relaxed">{pasteError}</div>
+                </div>
+              )}
+
+              {pasteResult && (
+                <div className="flex items-center gap-2 text-xs text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded-xl p-3">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                  <span>
+                    <strong>{pasteResult.added}</strong> questions added to {universityId.toUpperCase()} bank.
+                    {pasteResult.skipped > 0 && (
+                      <span className="text-muted-foreground ml-1">
+                        ({pasteResult.skipped} duplicate or previous quiz questions skipped)
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-end pt-1">
+                <Button
+                  type="button"
+                  onClick={() => parseAndSavePaste(pasteText)}
+                  disabled={!pasteText.trim()}
+                  className="font-semibold text-xs h-9 px-5 gap-2 bg-primary hover:bg-primary/90 cursor-pointer"
+                >
+                  <Plus className="h-4 w-4" />
+                  Save Questions to {universityId.toUpperCase()} Question Bank
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═════════════════════════════════════════════════════════════════════════ */}
+        {/* ─── TAB 3: MANUAL QUESTION ENTRY ─── */}
         {/* ═════════════════════════════════════════════════════════════════════════ */}
         {activeTab === "manual" && (
           <form onSubmit={handleAddManualQuestion} className="space-y-4">
@@ -2172,6 +2198,85 @@ Rules:
             )}
           </div>
         )}
+
+        {/* ═════════════════════════════════════════════════════════════════════════ */}
+        {/* ─── TAB 5: BANNED QUESTIONS LIST ─── */}
+        {/* ═════════════════════════════════════════════════════════════════════════ */}
+        {activeTab === "banned" && (() => {
+          const bannedQs = getBannedQuestions(universityId);
+          return (
+            <div className="space-y-4">
+              <div className="p-3.5 rounded-xl bg-destructive/5 border border-destructive/15 text-xs text-muted-foreground flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🚫</span>
+                  <span>
+                    Banned questions list. Once banned, a question (and any similar questions in the bank) will never be chosen for your mock exams.
+                  </span>
+                </div>
+                <Badge variant="outline" className="text-[10px] font-bold text-destructive border-destructive/30">
+                  {bannedQs.length} Banned Item{bannedQs.length !== 1 ? "s" : ""}
+                </Badge>
+              </div>
+
+              {bannedQs.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground bg-muted/10 rounded-xl border border-dashed">
+                  <span className="text-3xl block mb-2">🎈</span>
+                  <p className="text-xs">No banned questions yet!</p>
+                  <p className="text-[11px] text-muted-foreground/80 mt-1">You can ban problematic questions directly from the practice test review screen.</p>
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                  {bannedQs.map((q, idx) => (
+                    <div key={q.id} className="p-4 rounded-xl border bg-card text-xs space-y-3 shadow-sm">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary" className="text-[10px] font-bold">
+                            {SUBJECT_LABELS[q.subject] || q.subject}
+                          </Badge>
+                          {q.topic && (
+                            <span className="text-muted-foreground text-[10px]">· {q.topic}</span>
+                          )}
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            unbanQuestion(q.id, universityId);
+                            onQuestionsAdded();
+                          }}
+                          className="h-6 text-[10px] px-2 text-red-600 dark:text-red-400 font-semibold hover:bg-red-500/10 cursor-pointer rounded-md bg-transparent border-0"
+                        >
+                          Restore Question
+                        </Button>
+                      </div>
+                      <SmartText text={q.text} className="text-xs text-foreground font-medium" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-muted-foreground pt-1">
+                        {q.choices.map((c) => (
+                          <div
+                            key={c.id}
+                            className={cn(
+                              "p-2 rounded-lg border text-xs",
+                              c.id === q.correctAnswer
+                                ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold"
+                                : "bg-muted/30"
+                            )}
+                          >
+                            <span className="font-bold mr-1.5">{c.id}.</span> {c.text}
+                          </div>
+                        ))}
+                      </div>
+                      {q.explanation && (
+                        <p className="text-[11px] text-muted-foreground italic pt-1.5 border-t">
+                          💡 <strong>Solution:</strong> {q.explanation}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

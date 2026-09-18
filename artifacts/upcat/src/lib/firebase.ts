@@ -1,6 +1,6 @@
 import { initializeApp, getApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, Auth } from "firebase/auth";
-import { getFirestore, Firestore } from "firebase/firestore";
+import { getFirestore, initializeFirestore, Firestore } from "firebase/firestore";
 
 // Helper to check if a Firebase API key is valid
 const isValidFirebaseKey = (key: any): boolean => {
@@ -48,7 +48,15 @@ let db: Firestore;
 try {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
   auth = getAuth(app);
-  db = getFirestore(app);
+  
+  // Configure Firestore with long polling to resolve sandboxed iframe connection & WebSocket limits
+  try {
+    db = initializeFirestore(app, {
+      experimentalForceLongPolling: true,
+    });
+  } catch (firestoreInitErr) {
+    db = getFirestore(app);
+  }
 } catch (error) {
   console.warn("Failed to initialize Firebase with current config, using local-only fallback:", error);
   // Fallback structural objects if initialization fails completely

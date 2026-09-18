@@ -25,6 +25,7 @@ import { SmartText } from "./SmartText";
 import { AILimitCounter } from "./AILimitCounter";
 import { checkCanUseAI, recordAIUsage, useAIQuota } from "@/lib/aiQuota";
 import { sendGeminiChatMessage } from "@/lib/geminiClientService";
+import { getActiveAIProvider, setActiveAIProvider, AIProvider } from "@/lib/geminiKey";
 
 interface Message {
   id: string;
@@ -301,6 +302,23 @@ export function sampleRevolvedTopics(pool: SuggestedTopic[], count = 8): Suggest
 
 export function AIChatbox() {
   const quota = useAIQuota();
+  const [activeEngine, setActiveEngine] = useState<AIProvider>(() => getActiveAIProvider());
+
+  useEffect(() => {
+    const handleKeyChanged = () => {
+      setActiveEngine(getActiveAIProvider());
+    };
+    window.addEventListener("sulyap_ai_key_changed", handleKeyChanged);
+    return () => {
+      window.removeEventListener("sulyap_ai_key_changed", handleKeyChanged);
+    };
+  }, []);
+
+  const handleEngineChange = (provider: AIProvider) => {
+    setActiveAIProvider(provider);
+    setActiveEngine(provider);
+  };
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -580,13 +598,14 @@ export function AIChatbox() {
             <div className="h-9 w-9 rounded-xl bg-primary/15 dark:bg-primary/25 border border-primary/30 flex items-center justify-center text-primary shadow-xs shrink-0">
               <Sparkles className="h-4.5 w-4.5 animate-pulse text-primary" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-sm sm:text-base font-extrabold tracking-tight truncate">
-                  Isko AI Study Assistant
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                <CardTitle className="text-xs sm:text-base font-extrabold tracking-tight truncate">
+                  <span className="hidden xs:inline">Isko AI Study Assistant</span>
+                  <span className="inline xs:hidden">Isko AI</span>
                 </CardTitle>
               </div>
-              <CardDescription className="text-xs font-medium truncate text-muted-foreground">
+              <CardDescription className="text-[10px] sm:text-xs font-medium truncate text-muted-foreground mt-0.5 hidden xxs:block">
                 24/7 tutor for UPCAT, ACET, DCAT, USTET & CET preparation
               </CardDescription>
             </div>
@@ -601,7 +620,7 @@ export function AIChatbox() {
               size="sm"
               onClick={() => setIsFullScreen(true)}
               title="Open full screen AI study suite"
-              className="h-8 px-2.5 sm:px-3 text-xs font-semibold gap-1.5 bg-background hover:bg-primary/10 hover:text-primary hover:border-primary/40 text-foreground border-border/80 shadow-2xs cursor-pointer"
+              className="h-8 px-2 sm:px-3 text-xs font-semibold gap-1 bg-background hover:bg-primary/10 hover:text-primary hover:border-primary/40 text-foreground border-border/80 shadow-2xs cursor-pointer"
             >
               <Maximize2 className="h-3.5 w-3.5 text-primary" />
               <span className="hidden sm:inline">Full Screen</span>
@@ -669,34 +688,40 @@ export function AIChatbox() {
             </form>
 
             {/* Quick suggested chips */}
-            <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            <div className="flex items-center gap-2 overflow-hidden py-1">
               <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground shrink-0 flex items-center gap-1">
                 <Lightbulb className="h-3 w-3 text-amber-500" /> Topics:
               </span>
               <button
                 type="button"
                 onClick={handleRevolveTopics}
-                className="flex items-center gap-1 text-[10.5px] font-semibold text-primary hover:text-primary/80 bg-primary/10 hover:bg-primary/15 px-2 py-0.5 rounded-full transition-all cursor-pointer shrink-0 shadow-2xs"
+                className="flex items-center gap-1 text-[10.5px] font-semibold text-primary hover:text-primary/80 bg-primary/10 hover:bg-primary/15 px-2 py-0.5 rounded-full transition-all cursor-pointer shrink-0 shadow-2xs z-10"
                 title="Shuffle and revolve topics"
               >
                 <RefreshCw className={cn("h-2.5 w-2.5", isRevolving && "animate-spin")} />
                 <span>Shuffle</span>
               </button>
-              {revolvedTopics.slice(0, 4).map((qp, idx) => (
-                <button
-                  key={idx}
-                  onClick={() => handleSend(qp.prompt)}
-                  disabled={isLoading}
-                  className="whitespace-nowrap text-[11.5px] px-2.5 py-1 rounded-full border border-border/80 bg-muted/40 hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all font-medium disabled:opacity-50 shrink-0 cursor-pointer shadow-2xs"
-                >
-                  {qp.label}
-                </button>
-              ))}
+
+              <div className="overflow-hidden whitespace-nowrap flex-1 relative mask-fade-edges">
+                <div className="animate-marquee-slow inline-flex items-center gap-2">
+                  {revolvedTopics.concat(revolvedTopics).map((qp, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSend(qp.prompt)}
+                      disabled={isLoading}
+                      className="whitespace-nowrap text-[11.5px] px-2.5 py-1 rounded-full border border-border/80 bg-muted/40 hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all font-medium disabled:opacity-50 shrink-0 cursor-pointer shadow-2xs"
+                    >
+                      {qp.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button
                 onClick={() => setIsFullScreen(true)}
-                className="whitespace-nowrap text-[11px] px-2 py-1 rounded-full font-semibold text-primary hover:underline shrink-0 cursor-pointer"
+                className="whitespace-nowrap text-[11px] px-2 py-1 rounded-full font-semibold text-primary hover:underline shrink-0 cursor-pointer z-10"
               >
-                + More in Full Screen
+                + More
               </button>
             </div>
           </div>
@@ -751,18 +776,23 @@ export function AIChatbox() {
 
               <div 
                 ref={promptsRef}
-                className="flex items-center gap-1.5 overflow-x-auto py-1 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden"
+                className="overflow-hidden whitespace-nowrap py-1 relative mask-fade-edges"
               >
-                {revolvedTopics.map((qp, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => handleSend(qp.prompt)}
-                    disabled={isLoading}
-                    className="whitespace-nowrap text-xs px-3 py-1.5 rounded-full border border-border/80 bg-muted/40 hover:bg-primary/10 hover:border-primary/40 hover:text-primary hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 font-medium disabled:opacity-50 shrink-0 cursor-pointer shadow-2xs"
-                  >
-                    {qp.label}
-                  </button>
-                ))}
+                <div 
+                  className="animate-marquee-slow inline-flex items-center gap-2"
+                  onAnimationIteration={handleRevolveTopics}
+                >
+                  {revolvedTopics.concat(revolvedTopics).map((qp, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => handleSend(qp.prompt)}
+                      disabled={isLoading}
+                      className="whitespace-nowrap text-xs px-3 py-1.5 rounded-full border border-border/80 bg-muted/40 hover:bg-primary/10 hover:border-primary/40 hover:text-primary hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 font-medium disabled:opacity-50 shrink-0 cursor-pointer shadow-2xs"
+                    >
+                      {qp.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -821,9 +851,6 @@ export function AIChatbox() {
       >
         <Sparkles className="h-4 w-4 text-amber-300 animate-pulse group-hover:rotate-12 transition-transform" />
         <span>Ask Isko AI</span>
-        <span className="bg-primary-foreground/20 text-[10px] px-1.5 py-0.5 rounded-full font-mono">
-          {quota.remaining}
-        </span>
       </button>
 
       {/* 3. Dedicated Full Screen AI Study Suite Modal */}
@@ -928,18 +955,23 @@ export function AIChatbox() {
 
                 <div
                   ref={fullScreenPromptsRef}
-                  className="flex items-center gap-1.5 overflow-x-auto py-0.5 scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden flex-1"
+                  className="overflow-hidden whitespace-nowrap py-0.5 relative mask-fade-edges flex-1"
                 >
-                  {revolvedTopics.map((qp, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => handleSend(qp.prompt)}
-                      disabled={isLoading}
-                      className="whitespace-nowrap text-xs px-3 py-1.5 rounded-full border border-border/80 bg-muted/50 hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all font-medium disabled:opacity-50 shrink-0 cursor-pointer shadow-2xs"
-                    >
-                      {qp.label}
-                    </button>
-                  ))}
+                  <div 
+                    className="animate-marquee-slow inline-flex items-center gap-2"
+                    onAnimationIteration={handleRevolveTopics}
+                  >
+                    {revolvedTopics.concat(revolvedTopics).map((qp, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => handleSend(qp.prompt)}
+                        disabled={isLoading}
+                        className="whitespace-nowrap text-xs px-3 py-1.5 rounded-full border border-border/80 bg-muted/50 hover:bg-primary/10 hover:border-primary/40 hover:text-primary transition-all font-medium disabled:opacity-50 shrink-0 cursor-pointer shadow-2xs"
+                      >
+                        {qp.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <button

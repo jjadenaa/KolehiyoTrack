@@ -762,22 +762,32 @@ export async function handleGenerateSubjectQuestions(params: {
   topic?: string;
   count?: number;
   difficulty?: string;
+  bannedQuestions?: string[];
   apiKey?: string;
 }, customApiKey?: string): Promise<any[]> {
   const ai = getGeminiClient(customApiKey || params.apiKey);
 
   const count = Math.min(Math.max(1, params.count || 5), 10);
+  
+  let avoidPrompt = "";
+  if (params.bannedQuestions && params.bannedQuestions.length > 0) {
+    avoidPrompt = `\n- CRITICAL: Do NOT generate questions similar to any of these banned questions:\n${params.bannedQuestions.map((qText, idx) => `  ${idx + 1}. "${qText}"`).join("\n")}`;
+  }
+
   const prompt = `You are a premier test designer for Philippine College Entrance Tests (${params.universityId.toUpperCase()} standards).
 Generate ${count} high-yield, authentic CET multiple-choice practice questions for:
 - Subject: ${params.subject}
 - Target University: ${params.universityId.toUpperCase()}
 - Topic / Focus Area: ${params.topic || "Core High-Yield Exam Concepts"}
-- Difficulty: ${params.difficulty || "Moderate to High (Standard CET Level)"}
+- Difficulty: ${params.difficulty || "Moderate to High (Standard CET Level)"}${avoidPrompt}
 
 Requirements:
 - Philippine curriculum standard (DepEd Senior High STEM/ABM/HUMSS/General).
 - Realistic distractors with common student traps.
 - Step-by-step mathematical/grammatical/scientific explanations.
+- ABSOLUTE ANSWERABILITY: Every generated question must be 100% answerable with the given information. Do not leave any variables undefined, and do not reference any outside diagrams, charts, or images that are not explicitly provided.
+- ENFORCE EXACTLY 4 CHOICES: Every single question must have exactly 4 choices (labeled A, B, C, and D) without fail. If any question does not have exactly 4 choices, regenerate it immediately.
+- MATHEMATICALLY CORRECT ILLUSTRATIONS: For any question that includes a 'diagram', you must ensure that all dimensions, angles, and vertices are mathematically correct and consistent. For example, any triangle must satisfy the triangle inequality theorem. Any right triangle ABC with right angle at B must satisfy the Pythagorean theorem AB² + BC² = AC² (e.g. 5-12-13 or 3-4-5). Never generate impossible geometric values.
 - Output JSON array strictly adhering to schema:
 [
   {

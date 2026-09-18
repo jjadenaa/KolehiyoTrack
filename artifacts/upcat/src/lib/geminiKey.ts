@@ -1,9 +1,9 @@
 /**
  * Helper to get/set AI Provider and API Keys across storage and environment.
- * Supports Google Gemini, Groq, OpenAI, OpenRouter, and DeepSeek.
+ * Supports 100% free engines: Google Gemini, Groq, Cohere, and Cloudflare Workers AI.
  */
 
-export type AIProvider = "gemini" | "groq" | "openai" | "openrouter" | "deepseek";
+export type AIProvider = "gemini" | "groq" | "cohere" | "cloudflare";
 
 export interface AIProviderMeta {
   id: AIProvider;
@@ -30,60 +30,47 @@ export const AI_PROVIDERS: Record<AIProvider, AIProviderMeta> = {
     getKeyLabel: "Get Free Key at Google AI Studio",
     placeholder: "AIzaSy...",
     defaultModel: "gemini-2.5-flash",
-    description: "Official Google Gemini 2.5 Flash / 2.0 Flash with native STEM & KaTeX support. Generous free daily tier with no credit card required.",
+    description: "Official Google Gemini 2.5 Flash / 2.0 Flash with native STEM & KaTeX support. Generous free daily tier with zero credit card required.",
     endpoint: "https://generativelanguage.googleapis.com",
   },
   groq: {
     id: "groq",
     name: "Groq",
-    tagline: "Ultra-Fast LPU Inference (Free Tier)",
+    tagline: "Ultra-Fast LPU Inference (100% Free Tier)",
     badge: "Free & Ultra-Fast",
     freeTier: true,
     getKeyUrl: "https://console.groq.com/keys",
     getKeyLabel: "Get Free Key at Groq Console",
     placeholder: "gsk_...",
     defaultModel: "llama-3.1-8b-instant",
-    description: "Blazing fast inference speed running Meta Llama 3.1 8B Instant and open models on Groq LPUs. Free tier available at console.groq.com.",
+    description: "Blazing fast inference speed running Meta Llama 3.1 8B Instant and open models on Groq LPUs. Completely free tier available at console.groq.com.",
     endpoint: "https://api.groq.com/openai/v1/chat/completions",
   },
-  openai: {
-    id: "openai",
-    name: "OpenAI (GPT-4o)",
-    tagline: "GPT-4o Mini & GPT-4o",
-    badge: "High Accuracy",
-    freeTier: false,
-    getKeyUrl: "https://platform.openai.com/api-keys",
-    getKeyLabel: "Get Key at OpenAI Platform",
-    placeholder: "sk-proj-...",
-    defaultModel: "gpt-4o-mini",
-    description: "Industry standard GPT-4o Mini with exceptional step-by-step problem solving and nuanced reading comprehension.",
-    endpoint: "https://api.openai.com/v1/chat/completions",
-  },
-  openrouter: {
-    id: "openrouter",
-    name: "OpenRouter",
-    tagline: "Unified Multi-Model Gateway",
-    badge: "Multi-Model",
+  cohere: {
+    id: "cohere",
+    name: "Cohere (Command R)",
+    tagline: "Command R & Deep Reading (100% Free Trial)",
+    badge: "Free 1k/Month",
     freeTier: true,
-    getKeyUrl: "https://openrouter.ai/keys",
-    getKeyLabel: "Get Key at OpenRouter",
-    placeholder: "sk-or-v1-...",
-    defaultModel: "google/gemini-2.5-flash",
-    description: "Access hundreds of AI models through a single API key, with both free models and affordable pay-as-you-go options.",
-    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    getKeyUrl: "https://dashboard.cohere.com/api-keys",
+    getKeyLabel: "Get Free Key at Cohere Dashboard",
+    placeholder: "co_...",
+    defaultModel: "command-r",
+    description: "Purpose-built by Cohere for long reading passages, textual analysis, and nuanced reasoning. 1,000 free requests per month with no credit card required.",
+    endpoint: "https://api.cohere.com/compatibility/v1/chat/completions",
   },
-  deepseek: {
-    id: "deepseek",
-    name: "DeepSeek",
-    tagline: "DeepSeek-V3 Reasoning & Chat",
-    badge: "Cost-Effective",
-    freeTier: false,
-    getKeyUrl: "https://platform.deepseek.com/api_keys",
-    getKeyLabel: "Get Key at DeepSeek Platform",
-    placeholder: "sk-...",
-    defaultModel: "deepseek-chat",
-    description: "High-capability DeepSeek-V3 model renowned for mathematics, science logic, and thorough conceptual reasoning.",
-    endpoint: "https://api.deepseek.com/chat/completions",
+  cloudflare: {
+    id: "cloudflare",
+    name: "Cloudflare Workers AI",
+    tagline: "Edge Llama 3.1 (100% Free Daily Tier)",
+    badge: "Free 10k Neurons/Day",
+    freeTier: true,
+    getKeyUrl: "https://dash.cloudflare.com",
+    getKeyLabel: "Get Token at Cloudflare Dashboard",
+    placeholder: "ACCOUNT_ID:API_TOKEN or API Token",
+    defaultModel: "@cf/meta/llama-3.1-8b-instruct",
+    description: "Runs Meta Llama 3.1 8B directly on Cloudflare's decentralized global edge network. 10,000 free Neurons every day with zero payment required.",
+    endpoint: "https://api.cloudflare.com/client/v4/accounts",
   },
 };
 
@@ -97,6 +84,7 @@ const GEMINI_STORAGE_KEYS = [
 
 const ACTIVE_PROVIDER_STORAGE_KEY = "sulyap_active_ai_provider";
 const GROQ_MODEL_STORAGE_KEY = "sulyap_groq_model";
+const CLOUDFLARE_ACCOUNT_ID_KEY = "sulyap_cloudflare_account_id";
 
 export const GROQ_CANDIDATE_MODELS: string[] = [
   "llama-3.1-8b-instant",
@@ -127,6 +115,42 @@ export function saveStoredGroqModel(model: string): void {
       localStorage.removeItem(GROQ_MODEL_STORAGE_KEY);
     }
   } catch {}
+}
+
+export function getStoredCloudflareAccountId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const saved = localStorage.getItem(CLOUDFLARE_ACCOUNT_ID_KEY);
+    if (saved && saved.trim()) return saved.trim();
+  } catch {}
+  return "";
+}
+
+export function saveStoredCloudflareAccountId(accountId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const clean = (accountId || "").trim();
+    if (clean) {
+      localStorage.setItem(CLOUDFLARE_ACCOUNT_ID_KEY, clean);
+    } else {
+      localStorage.removeItem(CLOUDFLARE_ACCOUNT_ID_KEY);
+    }
+    window.dispatchEvent(new Event("sulyap_ai_key_changed"));
+  } catch {}
+}
+
+export function parseCloudflareCredentials(rawKey: string): { accountId: string; apiToken: string } {
+  const clean = (rawKey || "").trim();
+  if (clean.includes(":")) {
+    const idx = clean.indexOf(":");
+    return { accountId: clean.slice(0, idx).trim(), apiToken: clean.slice(idx + 1).trim() };
+  }
+  if (clean.includes("/") && !clean.startsWith("http")) {
+    const idx = clean.indexOf("/");
+    return { accountId: clean.slice(0, idx).trim(), apiToken: clean.slice(idx + 1).trim() };
+  }
+  const storedId = getStoredCloudflareAccountId();
+  return { accountId: storedId, apiToken: clean };
 }
 
 export function getActiveAIProvider(): AIProvider {
@@ -236,7 +260,7 @@ export function saveStoredGeminiApiKey(key: string): void {
 }
 
 /**
- * Checks if user has configured ANY custom API key (Gemini, Groq, OpenAI, OpenRouter, DeepSeek)
+ * Checks if user has configured ANY custom API key (Gemini, Groq, Cohere, Cloudflare)
  */
 export function hasAnyCustomApiKey(): boolean {
   const activeProvider = getActiveAIProvider();
@@ -244,7 +268,7 @@ export function hasAnyCustomApiKey(): boolean {
   if (activeKey) return true;
 
   // Check other providers if active is empty
-  const providers: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+  const providers: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
   for (const p of providers) {
     if (getStoredApiKeyForProvider(p)) return true;
   }
@@ -262,7 +286,7 @@ export function getActiveApiKeyInfo(): {
 
   // If active provider has no key, check if another provider has one configured
   if (!key) {
-    const providers: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+    const providers: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
     for (const p of providers) {
       const existing = getStoredApiKeyForProvider(p);
       if (existing) {
@@ -353,7 +377,7 @@ export function getAIProviderCandidates(currentProvider?: AIProvider): Array<{
   isConfigured: boolean;
 }> {
   const active = currentProvider || getActiveAIProvider();
-  const allProviders: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+  const allProviders: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
 
   const configuredOther: AIProvider[] = [];
   const unconfigured: AIProvider[] = [];

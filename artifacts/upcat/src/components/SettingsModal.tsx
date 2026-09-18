@@ -11,6 +11,9 @@ import {
   getActiveAIProvider,
   getStoredApiKeyForProvider,
   saveStoredApiKeyForProvider,
+  parseCloudflareCredentials,
+  getStoredCloudflareAccountId,
+  saveStoredCloudflareAccountId,
   getStoredGroqModel,
 } from "@/lib/geminiKey";
 import { saveUserAISettingsToAccount } from "@/lib/userAISettings";
@@ -55,7 +58,7 @@ import {
 import { cn } from "@/lib/utils";
 import { APIKeyTutorialModal } from "@/components/APIKeyTutorialModal";
 
-const PROVIDER_LIST: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+const PROVIDER_LIST: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
 
 interface SettingsModalProps {
   open?: boolean;
@@ -87,12 +90,79 @@ export function SettingsModal({
   const [soundEffects, setSoundEffects] = useState(() => {
     return localStorage.getItem("kt-sound-fx") !== "false";
   });
+  const [allowRepeatedQuestions, setAllowRepeatedQuestions] = useState(() => {
+    return localStorage.getItem("kt-allow-repeated") === "true";
+  });
+
+  // Notification States
+  const [notifPermission, setNotifPermission] = useState<string>(() => {
+    if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
+    return Notification.permission;
+  });
+  const [enableStudyReminders, setEnableStudyReminders] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("kt_notif_study") !== "false";
+  });
+  const [enableMissionAlerts, setEnableMissionAlerts] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("kt_notif_missions") !== "false";
+  });
+  const [enableCountdownAlerts, setEnableCountdownAlerts] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return localStorage.getItem("kt_notif_countdown") !== "false";
+  });
+
+  const [showNotificationPrompt, setShowNotificationPrompt] = useState(false);
+
+  // Sync state changes across windows & localStorage
+  useEffect(() => {
+    localStorage.setItem("kt_notif_study", String(enableStudyReminders));
+    window.dispatchEvent(new Event("kt_notification_settings_changed"));
+  }, [enableStudyReminders]);
+
+  useEffect(() => {
+    localStorage.setItem("kt_notif_missions", String(enableMissionAlerts));
+    window.dispatchEvent(new Event("kt_notification_settings_changed"));
+  }, [enableMissionAlerts]);
+
+  useEffect(() => {
+    localStorage.setItem("kt_notif_countdown", String(enableCountdownAlerts));
+    window.dispatchEvent(new Event("kt_notification_settings_changed"));
+  }, [enableCountdownAlerts]);
+
+  // Listen to external changes (e.g. from Dashboard)
+  useEffect(() => {
+    const handleSync = () => {
+      setEnableStudyReminders(localStorage.getItem("kt_notif_study") !== "false");
+      setEnableMissionAlerts(localStorage.getItem("kt_notif_missions") !== "false");
+      setEnableCountdownAlerts(localStorage.getItem("kt_notif_countdown") !== "false");
+      if (typeof window !== "undefined" && "Notification" in window) {
+        setNotifPermission(Notification.permission);
+      }
+    };
+    window.addEventListener("kt_notification_settings_changed", handleSync);
+    return () => {
+      window.removeEventListener("kt_notification_settings_changed", handleSync);
+    };
+  }, []);
+
+  const requestNotifPermissionInSettings = async () => {
+    if (!("Notification" in window)) return;
+    try {
+      const permission = await Notification.requestPermission();
+      setNotifPermission(permission);
+      window.dispatchEvent(new Event("kt_notification_settings_changed"));
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   // AI Tab states
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [autoSwitch, setAutoSwitch] = useState(quota.autoSwitchEnabled);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>(getActiveAIProvider());
   const [apiKey, setApiKey] = useState("");
+  const [cfAccountId, setCfAccountId] = useState(() => getStoredCloudflareAccountId());
   const [showKey, setShowKey] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
@@ -103,7 +173,14 @@ export function SettingsModal({
       if (defaultTab) setActiveTab(defaultTab);
       const active = getActiveAIProvider();
       setSelectedProvider(active);
-      setApiKey(getStoredApiKeyForProvider(active));
+      if (active === "cloudflare") {
+        const stored = getStoredApiKeyForProvider("cloudflare");
+        const parsed = parseCloudflareCredentials(stored);
+        setCfAccountId(parsed.accountId || getStoredCloudflareAccountId());
+        setApiKey(parsed.apiToken);
+      } else {
+        setApiKey(getStoredApiKeyForProvider(active));
+      }
       setSavedSuccess(false);
       setTestResult(null);
       setAutoSwitch(quota.autoSwitchEnabled);
@@ -122,7 +199,14 @@ export function SettingsModal({
   const handleQuickSwitch = async (provider: AIProvider) => {
     setActiveAIProvider(provider);
     setSelectedProvider(provider);
-    setApiKey(getStoredApiKeyForProvider(provider));
+    if (provider === "cloudflare") {
+      const stored = getStoredApiKeyForProvider("cloudflare");
+      const parsed = parseCloudflareCredentials(stored);
+      setCfAccountId(parsed.accountId || getStoredCloudflareAccountId());
+      setApiKey(parsed.apiToken);
+    } else {
+      setApiKey(getStoredApiKeyForProvider(provider));
+    }
     if (user) {
       await saveUserAISettingsToAccount(user, { activeProvider: provider });
     }
@@ -130,7 +214,14 @@ export function SettingsModal({
 
   const handleSelectProvider = (prov: AIProvider) => {
     setSelectedProvider(prov);
-    setApiKey(getStoredApiKeyForProvider(prov));
+    if (prov === "cloudflare") {
+      const stored = getStoredApiKeyForProvider("cloudflare");
+      const parsed = parseCloudflareCredentials(stored);
+      setCfAccountId(parsed.accountId || getStoredCloudflareAccountId());
+      setApiKey(parsed.apiToken);
+    } else {
+      setApiKey(getStoredApiKeyForProvider(prov));
+    }
     setTestResult(null);
     setSavedSuccess(false);
   };
@@ -140,13 +231,27 @@ export function SettingsModal({
   };
 
   const handleTestKey = async () => {
-    const cleanKey = cleanKeyInput(apiKey);
+    let cleanKey = cleanKeyInput(apiKey);
     if (!cleanKey) {
       setTestResult({
         success: false,
-        message: `Please enter an API key for ${AI_PROVIDERS[selectedProvider].name} first.`,
+        message: `Please enter an API key or token for ${AI_PROVIDERS[selectedProvider].name} first.`,
       });
       return;
+    }
+
+    if (selectedProvider === "cloudflare") {
+      const cleanAcc = cfAccountId.trim();
+      if (!cleanAcc && !cleanKey.includes(":")) {
+        setTestResult({
+          success: false,
+          message: "Please enter your Cloudflare Account ID and API Token.",
+        });
+        return;
+      }
+      if (!cleanKey.includes(":") && cleanAcc) {
+        cleanKey = `${cleanAcc}:${cleanKey}`;
+      }
     }
 
     setTestingKey(true);
@@ -156,13 +261,24 @@ export function SettingsModal({
       const res = await testAIProviderConnection(selectedProvider, cleanKey);
       setTestResult(res);
       if (res.success) {
+        if (selectedProvider === "cloudflare") {
+          saveStoredCloudflareAccountId(cfAccountId.trim());
+        }
         saveStoredApiKeyForProvider(selectedProvider, cleanKey);
         setActiveAIProvider(selectedProvider);
         if (user) {
           await saveUserAISettingsToAccount(user, {
             activeProvider: selectedProvider,
             providerKey: { provider: selectedProvider, key: cleanKey },
+            cloudflareAccountId: selectedProvider === "cloudflare" ? cfAccountId.trim() : undefined,
           });
+        }
+        
+        // Trigger notification prompt if permissions are not set yet
+        if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+          setTimeout(() => {
+            setShowNotificationPrompt(true);
+          }, 800);
         }
       }
     } catch (err: any) {
@@ -176,7 +292,13 @@ export function SettingsModal({
   };
 
   const handleSaveKey = async () => {
-    const trimmed = cleanKeyInput(apiKey);
+    let trimmed = cleanKeyInput(apiKey);
+    if (selectedProvider === "cloudflare" && trimmed && !trimmed.includes(":") && cfAccountId.trim()) {
+      trimmed = `${cfAccountId.trim()}:${trimmed}`;
+    }
+    if (selectedProvider === "cloudflare") {
+      saveStoredCloudflareAccountId(cfAccountId.trim());
+    }
     saveStoredApiKeyForProvider(selectedProvider, trimmed);
     if (trimmed) {
       setActiveAIProvider(selectedProvider);
@@ -185,20 +307,33 @@ export function SettingsModal({
       await saveUserAISettingsToAccount(user, {
         activeProvider: trimmed ? selectedProvider : undefined,
         providerKey: { provider: selectedProvider, key: trimmed },
+        cloudflareAccountId: selectedProvider === "cloudflare" ? cfAccountId.trim() : undefined,
       });
     }
     setSavedSuccess(true);
     setTimeout(() => {
       setSavedSuccess(false);
     }, 1500);
+
+    // Trigger notification prompt if permissions are not set yet and a valid key was saved
+    if (trimmed && typeof window !== "undefined" && "Notification" in window && Notification.permission === "default") {
+      setTimeout(() => {
+        setShowNotificationPrompt(true);
+      }, 800);
+    }
   };
 
   const handleClearKey = async () => {
     saveStoredApiKeyForProvider(selectedProvider, "");
     setApiKey("");
+    if (selectedProvider === "cloudflare") {
+      setCfAccountId("");
+      saveStoredCloudflareAccountId("");
+    }
     if (user) {
       await saveUserAISettingsToAccount(user, {
         providerKey: { provider: selectedProvider, key: "" },
+        cloudflareAccountId: selectedProvider === "cloudflare" ? "" : undefined,
       });
     }
     setSavedSuccess(true);
@@ -229,6 +364,23 @@ export function SettingsModal({
     const next = !soundEffects;
     setSoundEffects(next);
     localStorage.setItem("kt-sound-fx", String(next));
+  };
+
+  const handleToggleRepeatedQuestions = () => {
+    const next = !allowRepeatedQuestions;
+    setAllowRepeatedQuestions(next);
+    localStorage.setItem("kt-allow-repeated", String(next));
+  };
+
+  const [historyCleared, setHistoryCleared] = useState(false);
+  const handleClearQuestionHistory = () => {
+    const unis = ["upcat", "pupcet", "dost", "acet", "dcat", "ustet", "pldt", "sm"];
+    unis.forEach((u) => {
+      localStorage.removeItem(`kolehiyotrack_past_quiz_q_${u}`);
+      localStorage.removeItem(`kolehiyotrack_history_q_${u}`);
+    });
+    setHistoryCleared(true);
+    setTimeout(() => setHistoryCleared(false), 3000);
   };
 
   const {
@@ -462,6 +614,122 @@ export function SettingsModal({
                         {highContrast ? "On" : "Off"}
                       </Button>
                     </div>
+
+                    {/* Allow Repeated/Duplicate Questions Setting */}
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-card">
+                      <div>
+                        <div className="text-xs font-bold text-foreground">Allow duplicate/repeated questions</div>
+                        <div className="text-[11px] text-muted-foreground">Allow questions that have already appeared in your previous quizzes or past sessions</div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant={allowRepeatedQuestions ? "default" : "outline"}
+                        size="sm"
+                        onClick={handleToggleRepeatedQuestions}
+                        className="h-7 text-xs font-semibold px-3 rounded-full cursor-pointer"
+                      >
+                        {allowRepeatedQuestions ? "Allowed" : "Filtered"}
+                      </Button>
+                    </div>
+
+                    {/* Reset Question History Setting */}
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-card">
+                      <div>
+                        <div className="text-xs font-bold text-foreground">Reset past quiz question history</div>
+                        <div className="text-[11px] text-muted-foreground">Clear memory of questions tested in past quizzes so they can be re-tested</div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleClearQuestionHistory}
+                        className="h-7 text-xs font-semibold px-3 rounded-full text-destructive hover:text-destructive cursor-pointer"
+                      >
+                        {historyCleared ? "Cleared!" : "Clear History"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="h-px bg-border" />
+
+                {/* System Notifications & Reminders Setup */}
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <BellRing className="h-4 w-4 text-primary" />
+                      Push Notification Preferences
+                    </h3>
+                    <p className="text-xs text-muted-foreground">
+                      Enable and customize real-time reminders for your study streak and exams
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {/* Setup Notification Permission */}
+                    <div className="flex items-center justify-between p-3 rounded-xl border border-border bg-card">
+                      <div>
+                        <div className="text-xs font-bold text-foreground">Web notifications permission</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {notifPermission === "granted" 
+                            ? "Notifications allowed on this device" 
+                            : notifPermission === "denied" 
+                            ? "Blocked by your browser. Please reset site permissions." 
+                            : "Unlock daily missions & study alerts"}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        variant={notifPermission === "granted" ? "outline" : "default"}
+                        size="sm"
+                        disabled={notifPermission === "granted" || notifPermission === "unsupported"}
+                        onClick={requestNotifPermissionInSettings}
+                        className="h-7 text-xs font-semibold px-3 rounded-full cursor-pointer"
+                      >
+                        {notifPermission === "granted" 
+                          ? "Granted" 
+                          : notifPermission === "denied" 
+                          ? "Blocked" 
+                          : "Enable"}
+                      </Button>
+                    </div>
+
+                    {notifPermission === "granted" && (
+                      <div className="space-y-2 border-t border-border/40 pt-2.5">
+                        {/* Toggle Study Reminders */}
+                        <div className="flex items-center justify-between py-1.5 px-1">
+                          <span className="text-xs font-semibold text-muted-foreground">Daily Study Reminders</span>
+                          <input
+                            type="checkbox"
+                            checked={enableStudyReminders}
+                            onChange={(e) => setEnableStudyReminders(e.target.checked)}
+                            className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer bg-card"
+                          />
+                        </div>
+
+                        {/* Toggle Mission Alerts */}
+                        <div className="flex items-center justify-between py-1.5 px-1">
+                          <span className="text-xs font-semibold text-muted-foreground">Daily Mission Resets</span>
+                          <input
+                            type="checkbox"
+                            checked={enableMissionAlerts}
+                            onChange={(e) => setEnableMissionAlerts(e.target.checked)}
+                            className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer bg-card"
+                          />
+                        </div>
+
+                        {/* Toggle Countdown Alerts */}
+                        <div className="flex items-center justify-between py-1.5 px-1">
+                          <span className="text-xs font-semibold text-muted-foreground">Exam Countdown Milestones</span>
+                          <input
+                            type="checkbox"
+                            checked={enableCountdownAlerts}
+                            onChange={(e) => setEnableCountdownAlerts(e.target.checked)}
+                            className="rounded border-border text-primary focus:ring-primary h-4 w-4 cursor-pointer bg-card"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -654,11 +922,42 @@ export function SettingsModal({
                   </p>
                 </div>
 
+                {/* Cloudflare Account ID input if Cloudflare */}
+                {selectedProvider === "cloudflare" && (
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-foreground">
+                        Cloudflare Account ID:
+                      </label>
+                      <span className="text-[10px] text-muted-foreground">
+                        From dash.cloudflare.com sidebar
+                      </span>
+                    </div>
+                    <Input
+                      type="text"
+                      value={cfAccountId}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val.includes(":")) {
+                          const parts = val.split(":");
+                          setCfAccountId(parts[0].trim());
+                          setApiKey(parts[1].trim());
+                        } else {
+                          setCfAccountId(val);
+                        }
+                        setTestResult(null);
+                      }}
+                      placeholder="e.g. 7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c"
+                      className="text-xs font-mono"
+                    />
+                  </div>
+                )}
+
                 {/* Key Input */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-foreground">
-                      Paste {currentMeta.name} API Key:
+                      {selectedProvider === "cloudflare" ? "Cloudflare API Token:" : `Paste ${currentMeta.name} API Key:`}
                     </label>
                     {hasKeyForSelected && (
                       <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
@@ -895,6 +1194,40 @@ export function SettingsModal({
         onOpenChange={setTutorialOpen}
         defaultProvider={selectedProvider}
       />
+      <Dialog open={showNotificationPrompt} onOpenChange={setShowNotificationPrompt}>
+        <DialogContent className="sm:max-w-md border-2 border-primary/20 bg-card">
+          <DialogHeader className="flex flex-col items-center text-center space-y-3">
+            <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center animate-bounce">
+              <BellRing className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-lg font-bold">Excellent! AI Engine Configured 🤖</DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground leading-relaxed max-w-sm text-center">
+              Now that your custom study assistant is ready, enable real-time browser notifications so you never miss streak checkpoints, daily mission resets, or CET countdowns!
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2.5 mt-3">
+            <Button
+              type="button"
+              onClick={async () => {
+                setShowNotificationPrompt(false);
+                await requestNotifPermissionInSettings();
+              }}
+              className="w-full h-10 text-xs font-bold gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground cursor-pointer shadow-sm"
+            >
+              <BellRing className="h-4 w-4" />
+              Enable Study Notifications
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setShowNotificationPrompt(false)}
+              className="w-full h-9 text-xs font-medium text-muted-foreground hover:text-foreground"
+            >
+              Maybe Later
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

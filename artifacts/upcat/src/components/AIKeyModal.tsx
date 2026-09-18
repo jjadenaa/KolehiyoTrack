@@ -41,6 +41,9 @@ import {
   setActiveAIProvider, 
   getStoredApiKeyForProvider, 
   saveStoredApiKeyForProvider,
+  getStoredCloudflareAccountId,
+  saveStoredCloudflareAccountId,
+  parseCloudflareCredentials,
   hasAnyCustomApiKey,
   getActiveApiKeyInfo,
   getStoredGroqModel
@@ -56,7 +59,7 @@ interface AIKeyModalProps {
   highlightLimitReached?: boolean;
 }
 
-const PROVIDER_LIST: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+const PROVIDER_LIST: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
 
 export function AIKeyModal({ 
   trigger, 
@@ -71,6 +74,7 @@ export function AIKeyModal({
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>(initialProvider || getActiveAIProvider());
   const [apiKey, setApiKey] = useState("");
+  const [cfAccountId, setCfAccountId] = useState(getStoredCloudflareAccountId());
   const [showKey, setShowKey] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
@@ -90,7 +94,14 @@ export function AIKeyModal({
     if (isOpen) {
       const active = initialProvider || getActiveAIProvider();
       setSelectedProvider(active);
-      setApiKey(getStoredApiKeyForProvider(active));
+      if (active === "cloudflare") {
+        const stored = getStoredApiKeyForProvider("cloudflare");
+        const parsed = parseCloudflareCredentials(stored);
+        setCfAccountId(parsed.accountId || getStoredCloudflareAccountId());
+        setApiKey(parsed.apiToken);
+      } else {
+        setApiKey(getStoredApiKeyForProvider(active));
+      }
       setSavedSuccess(false);
       setTestResult(null);
     }
@@ -99,7 +110,14 @@ export function AIKeyModal({
   // When selected provider changes in the tab, load that provider's saved key
   const handleSelectProvider = (prov: AIProvider) => {
     setSelectedProvider(prov);
-    setApiKey(getStoredApiKeyForProvider(prov));
+    if (prov === "cloudflare") {
+      const stored = getStoredApiKeyForProvider("cloudflare");
+      const parsed = parseCloudflareCredentials(stored);
+      setCfAccountId(parsed.accountId || getStoredCloudflareAccountId());
+      setApiKey(parsed.apiToken);
+    } else {
+      setApiKey(getStoredApiKeyForProvider(prov));
+    }
     setTestResult(null);
     setSavedSuccess(false);
   };
@@ -109,10 +127,21 @@ export function AIKeyModal({
   };
 
   const handleTestKey = async () => {
-    const cleanKey = cleanKeyInput(apiKey);
+    let cleanKey = cleanKeyInput(apiKey);
     if (!cleanKey) {
-      setTestResult({ success: false, message: `Please enter an API key for ${AI_PROVIDERS[selectedProvider].name} first.` });
+      setTestResult({ success: false, message: `Please enter an API key or token for ${AI_PROVIDERS[selectedProvider].name} first.` });
       return;
+    }
+
+    if (selectedProvider === "cloudflare") {
+      const cleanAcc = cfAccountId.trim();
+      if (!cleanAcc && !cleanKey.includes(":")) {
+        setTestResult({ success: false, message: "Please enter your Cloudflare Account ID and API Token." });
+        return;
+      }
+      if (!cleanKey.includes(":") && cleanAcc) {
+        cleanKey = `${cleanAcc}:${cleanKey}`;
+      }
     }
 
     setTestingKey(true);
@@ -123,12 +152,16 @@ export function AIKeyModal({
       setTestResult(res);
       if (res.success) {
         // Auto-save and activate provider on successful test
+        if (selectedProvider === "cloudflare") {
+          saveStoredCloudflareAccountId(cfAccountId.trim());
+        }
         saveStoredApiKeyForProvider(selectedProvider, cleanKey);
         setActiveAIProvider(selectedProvider);
         if (user) {
           await saveUserAISettingsToAccount(user, {
             activeProvider: selectedProvider,
             providerKey: { provider: selectedProvider, key: cleanKey },
+            cloudflareAccountId: selectedProvider === "cloudflare" ? cfAccountId.trim() : undefined,
           });
         }
         onKeySaved?.(true);
@@ -144,7 +177,13 @@ export function AIKeyModal({
   };
 
   const handleSave = async () => {
-    const trimmed = cleanKeyInput(apiKey);
+    let trimmed = cleanKeyInput(apiKey);
+    if (selectedProvider === "cloudflare" && trimmed && !trimmed.includes(":") && cfAccountId.trim()) {
+      trimmed = `${cfAccountId.trim()}:${trimmed}`;
+    }
+    if (selectedProvider === "cloudflare") {
+      saveStoredCloudflareAccountId(cfAccountId.trim());
+    }
     saveStoredApiKeyForProvider(selectedProvider, trimmed);
     if (trimmed) {
       setActiveAIProvider(selectedProvider);
@@ -153,6 +192,7 @@ export function AIKeyModal({
       await saveUserAISettingsToAccount(user, {
         activeProvider: trimmed ? selectedProvider : undefined,
         providerKey: { provider: selectedProvider, key: trimmed },
+        cloudflareAccountId: selectedProvider === "cloudflare" ? cfAccountId.trim() : undefined,
       });
     }
     setSavedSuccess(true);
@@ -166,9 +206,14 @@ export function AIKeyModal({
   const handleClear = async () => {
     saveStoredApiKeyForProvider(selectedProvider, "");
     setApiKey("");
+    if (selectedProvider === "cloudflare") {
+      setCfAccountId("");
+      saveStoredCloudflareAccountId("");
+    }
     if (user) {
       await saveUserAISettingsToAccount(user, {
         providerKey: { provider: selectedProvider, key: "" },
+        cloudflareAccountId: selectedProvider === "cloudflare" ? "" : undefined,
       });
     }
     setSavedSuccess(true);
@@ -362,11 +407,42 @@ export function AIKeyModal({
             </p>
           </div>
 
-          {/* Key Input */}
+          {/* Dedicated Account ID field for Cloudflare Workers AI */}
+          {selectedProvider === "cloudflare" && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-foreground">
+                  Cloudflare Account ID:
+                </label>
+                <span className="text-[10px] text-muted-foreground">
+                  Found in dash.cloudflare.com sidebar or URL
+                </span>
+              </div>
+              <Input
+                type="text"
+                value={cfAccountId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.includes(":")) {
+                    const parts = val.split(":");
+                    setCfAccountId(parts[0].trim());
+                    setApiKey(parts[1].trim());
+                  } else {
+                    setCfAccountId(val);
+                  }
+                  setTestResult(null);
+                }}
+                placeholder="e.g. 7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c"
+                className="text-xs font-mono"
+              />
+            </div>
+          )}
+
+          {/* Key / Token Input */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-semibold text-foreground">
-                Paste {currentMeta.name} API Key:
+                {selectedProvider === "cloudflare" ? "Cloudflare API Token:" : `Paste ${currentMeta.name} API Key:`}
               </label>
               {hasKeyForSelected && (
                 <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-1">

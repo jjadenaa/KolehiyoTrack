@@ -6,7 +6,13 @@ const LOCAL_STORAGE_KEY = "kolehiyotrack_added_universities";
 const LOCAL_STORAGE_DATES_KEY = "kolehiyotrack_university_exam_dates";
 export const UNIVERSITIES_CHANGED_EVENT = "kolehiyotrack_universities_changed";
 export const EXAM_DATES_CHANGED_EVENT = "kolehiyotrack_exam_dates_changed";
-const DEFAULT_UNIVERSITIES: string[] = [];
+const DEFAULT_UNIVERSITIES: string[] = [
+  'upcat',
+  'ateneo',
+  'dlsu',
+  'ust',
+  'bu'
+];
 
 export function getLocalAddedUniversities(): string[] {
   try {
@@ -91,6 +97,11 @@ export const DEFAULT_UNIVERSITY_EXAM_DATES: Record<string, { label: string; defa
   dlsu: { label: "Sept 5 – Dec 6, 2026", defaultTargetDate: "2026-09-05" },
   ust: { label: "Oct 3, 2026 – Jan 31, 2027", defaultTargetDate: "2026-10-03" },
   bu: { label: "Aug 20 – Dec 6, 2026", defaultTargetDate: "2026-08-20" },
+  slsu: { label: "Sept 10 – Dec 3, 2026", defaultTargetDate: "2026-12-03" },
+  neust: { label: "Sept 3 – Nov 30, 2026", defaultTargetDate: "2026-11-30" },
+  ucn: { label: "Sept 7 – Oct 30, 2026", defaultTargetDate: "2026-10-30" },
+  jru: { label: "Sept 7, 2026 – TBA" },
+  ssu: { label: "Sept 7 – Dec 4, 2026", defaultTargetDate: "2026-12-04" },
 };
 
 export function calculateDaysRemaining(dateInput?: string, uniId?: string): number | null {
@@ -121,6 +132,103 @@ export function formatCustomDateDisplay(dateInput?: string, uniId?: string): str
     day: "numeric",
     year: "numeric",
   });
+}
+
+// ─── Calendar Filters Storage & Sync ──────────────────────────────────────────
+
+const LOCAL_STORAGE_FILTERS_KEY = "kolehiyotrack_calendar_filters";
+export const CALENDAR_FILTERS_CHANGED_EVENT = "kolehiyotrack_calendar_filters_changed";
+
+export interface CalendarFilters {
+  search: string;
+  institutionType: string; // 'all' | 'State University' | 'Public' | 'Private' | 'Government Scholarship'
+  islandGroup: string; // 'all' | 'Luzon' | 'Visayas' | 'Mindanao'
+  region: string; // 'all' | 'NCR' | 'Region III' | 'Region IV-A' | 'Region V' | 'Region VII' | 'Region VIII'
+  category: string; // 'all' | 'big4' | 'uaap' | 'ncaa'
+  openMonth: string; // 'all' | '1'..'12'
+  closeMonth: string; // 'all' | '1'..'12'
+}
+
+export const DEFAULT_CALENDAR_FILTERS: CalendarFilters = {
+  search: "",
+  institutionType: "all",
+  islandGroup: "all",
+  region: "all",
+  category: "all",
+  openMonth: "all",
+  closeMonth: "all",
+};
+
+export function getLocalCalendarFilters(): CalendarFilters {
+  try {
+    const saved = localStorage.getItem(LOCAL_STORAGE_FILTERS_KEY);
+    if (!saved) return DEFAULT_CALENDAR_FILTERS;
+    const parsed = JSON.parse(saved);
+    return { ...DEFAULT_CALENDAR_FILTERS, ...parsed };
+  } catch (err) {
+    return DEFAULT_CALENDAR_FILTERS;
+  }
+}
+
+export function setLocalCalendarFilters(filters: CalendarFilters) {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_FILTERS_KEY, JSON.stringify(filters));
+    window.dispatchEvent(new Event(CALENDAR_FILTERS_CHANGED_EVENT));
+  } catch (err) {
+    console.error("Failed to save calendar filters locally:", err);
+  }
+}
+
+export async function saveUserCalendarFilters(user: User | null, filters: CalendarFilters) {
+  setLocalCalendarFilters(filters);
+  if (user) {
+    try {
+      const profileDocRef = doc(db, "user_sessions", user.uid, "settings", "profile");
+      await setDoc(profileDocRef, { calendarFilters: filters, updatedAt: Date.now() }, { merge: true });
+    } catch (err) {
+      console.error("Failed to sync calendar filters to Firestore:", err);
+    }
+  }
+}
+
+export function subscribeUserCalendarFilters(
+  user: User | null,
+  onSync: (filters: CalendarFilters) => void
+): () => void {
+  const initial = getLocalCalendarFilters();
+  onSync(initial);
+
+  const handleLocalEvent = () => onSync(getLocalCalendarFilters());
+  window.addEventListener(CALENDAR_FILTERS_CHANGED_EVENT, handleLocalEvent);
+
+  if (!user) {
+    return () => window.removeEventListener(CALENDAR_FILTERS_CHANGED_EVENT, handleLocalEvent);
+  }
+
+  const profileDocRef = doc(db, "user_sessions", user.uid, "settings", "profile");
+  const unsubFirestore = onSnapshot(
+    profileDocRef,
+    (snap) => {
+      if (snap.exists() && snap.data()?.calendarFilters && typeof snap.data().calendarFilters === "object") {
+        const remoteFilters: CalendarFilters = { ...DEFAULT_CALENDAR_FILTERS, ...snap.data().calendarFilters };
+        const localSaved = localStorage.getItem(LOCAL_STORAGE_FILTERS_KEY);
+        if (localSaved !== JSON.stringify(remoteFilters)) {
+          localStorage.setItem(LOCAL_STORAGE_FILTERS_KEY, JSON.stringify(remoteFilters));
+          window.dispatchEvent(new Event(CALENDAR_FILTERS_CHANGED_EVENT));
+        }
+        onSync(remoteFilters);
+      }
+    },
+    (err) => {
+      console.error("[Firestore] Error reading user calendar filters:", err);
+      onSync(getLocalCalendarFilters());
+    }
+  );
+
+  return () => {
+    unsubFirestore();
+    window.removeEventListener(CALENDAR_FILTERS_CHANGED_EVENT, handleLocalEvent);
+  };
 }
 
 // ─── Subscriptions ───────────────────────────────────────────────────────────

@@ -1,8 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
-import { getLocalAddedUniversities, subscribeUserAddedUniversities, saveUserAddedUniversities } from "@/lib/userUniversities";
+import { motion } from "framer-motion";
+import { getLocalAddedUniversities, subscribeUserAddedUniversities, saveUserAddedUniversities, getLocalExamDates, subscribeUserExamDates, calculateDaysRemaining } from "@/lib/userUniversities";
+import { getActiveApplicationTimelines, STUDY_TIPS_POOL } from "@/lib/applicationTimelines";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -23,7 +25,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { LogIn, LogOut, Sun, Moon, Menu, Plus, Home, Book, X, History, BrainCircuit, Settings } from "lucide-react";
+import { LogIn, LogOut, Sun, Moon, Menu, Plus, Home, Book, X, History, BrainCircuit, Settings, Bell, Sparkles, Megaphone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CURRENT_VERSION, CHANGELOG_DATA } from "../config/changelog";
 import { getLocalMistakes } from "@/lib/mistakeDiary";
@@ -35,9 +37,14 @@ import { UniversityLogo } from "@/components/UniversityLogo";
 const UNIVERSITIES = [
   { id: 'upcat', name: 'University of the Philippines - (UPCAT 2028)', shortName: 'UPCAT', date: 'TBA' },
   { id: 'ateneo', name: 'Ateneo de Manila University - (ACET 2027)', shortName: 'ACET', date: 'TBA' },
-  { id: 'dlsu', name: 'De La Salle University - (DCAT 2027)', shortName: 'DCAT', date: 'TBA' },
-  { id: 'ust', name: 'University of Santo Tomas - (USTET 2027)', shortName: 'USTET', date: 'TBA' },
-  { id: 'bu', name: 'Bicol University - (BUCET 2027)', shortName: 'BUCET', date: 'November 19, 2026' }
+  { id: 'dlsu', name: 'De La Salle University - (DCAT 2027)', shortName: 'DCAT', date: 'Sept 5 – Dec 6, 2026' },
+  { id: 'ust', name: 'University of Santo Tomas - (USTET 2027)', shortName: 'USTET', date: 'Oct 3, 2026 – Jan 31, 2027' },
+  { id: 'bu', name: 'Bicol University - (BUCET 2027)', shortName: 'BUCET', date: 'Aug 20 – Dec 6, 2026' },
+  { id: 'slsu', name: 'Southern Luzon State University - (SLSU 2027)', shortName: 'SLSU', date: 'Sept 10 – Dec 3, 2026' },
+  { id: 'neust', name: 'Nueva Ecija Univ of Science & Tech - (NEUST 2027)', shortName: 'NEUST', date: 'Sept 3 – Nov 30, 2026' },
+  { id: 'ucn', name: 'University of Camarines Norte - (UCN 2027)', shortName: 'UCN', date: 'Sept 7 – Oct 30, 2026' },
+  { id: 'jru', name: 'Jose Rizal University - (JRU 2027)', shortName: 'JRU', date: 'Sept 7 – TBA, 2026' },
+  { id: 'ssu', name: 'Sorsogon State University - (SSU 2027)', shortName: 'SSU', date: 'Sept 7 – Dec 4, 2026' }
 ];
 
 export function Layout({ children, hideSidebar = false }: { children: React.ReactNode; hideSidebar?: boolean }) {
@@ -50,7 +57,9 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
   const [location] = useLocation();
 
   const [addedUniIds, setAddedUniIds] = useState<string[]>(() => getLocalAddedUniversities());
+  const [userExamDates, setUserExamDates] = useState<Record<string, string>>(() => getLocalExamDates());
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [tickerCycle, setTickerCycle] = useState(0);
 
   useEffect(() => {
     return subscribeUserAddedUniversities(user, (ids) => {
@@ -58,7 +67,50 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
     });
   }, [user]);
 
+  useEffect(() => {
+    return subscribeUserExamDates(user, (dates) => {
+      setUserExamDates(dates);
+    });
+  }, [user]);
+
+  const activeTimelines = getActiveApplicationTimelines();
   const filteredUniversities = UNIVERSITIES.filter(uni => addedUniIds.includes(uni.id));
+
+  const tickerItems = useMemo(() => {
+    const items: string[] = [];
+
+    // 0. Urgent Official Announcements
+    items.push(`🚨 The University of the Philippines (UP) has EXTENDED, for the third time, the deadline for submission of grades for Academic Year 2027-2028. The new deadline is set on September 21, 2026.`);
+    items.push(`📢 DOST-SEI Scholarship application deadline extended to September 24, 2026.`);
+    items.push(`📢 Adamson University (AdU) application open: Sept 17 - TBA.`);
+    items.push(`📢 DLSU-Benilde application period: Sept 15, 2026 - March 17, 2027.`);
+
+    // 1. Live open applications (past due applications are automatically filtered out!)
+    activeTimelines.slice(0, 12).forEach((app) => {
+      items.push(`📢 Application for ${app.fullName} (${app.shortName || app.id.toUpperCase()}): ${app.openStr}${app.closeStr && app.closeStr !== 'TBA' ? ` – ${app.closeStr}` : ''}`);
+    });
+
+    // 2. Dynamic live countdowns synced with user's set dates (or default dates)
+    filteredUniversities.forEach((uni) => {
+      const customDate = userExamDates[uni.id];
+      const days = calculateDaysRemaining(customDate, uni.id);
+      if (days !== null && days > 0) {
+        items.push(`⏳ ${days} days until exam for ${uni.name.split(' - ')[0]} (${uni.shortName})`);
+      }
+    });
+
+    // 3. Dynamic Rotating Tip
+    const randomTip = STUDY_TIPS_POOL[Math.floor(Math.random() * STUDY_TIPS_POOL.length)] || STUDY_TIPS_POOL[0];
+    items.push(`💡 Tips: ${randomTip}`);
+
+    // 4. Feature updates item
+    items.push(`🚀 ${CURRENT_VERSION}: Added SLSU, NEUST, UCN, JRU & SSU support, live calendar countdowns & prompt copying`);
+
+    // 5. Permanent social media handle
+    items.push(`📱 Follow our social media pages: @kolehiyotrack on TikTok`);
+
+    return items;
+  }, [userExamDates, filteredUniversities, tickerCycle]);
 
   return (
     <div className="min-h-[100dvh] flex bg-background text-foreground overflow-hidden">
@@ -165,7 +217,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                   </DialogContent>
                 </Dialog>
               </div>
-              <nav className="space-y-1 px-2">
+              <nav className="space-y-2 px-2 py-1">
                 {filteredUniversities.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground/60 px-3 py-2 italic text-center">
                     No universities added. Click "+" above to add.
@@ -175,7 +227,13 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                     const isUP = uni.id === 'upcat';
                     const isAteneo = uni.id === 'ateneo';
                     const isDLSU = uni.id === 'dlsu';
+                    const isUST = uni.id === 'ust';
                     const isBU = uni.id === 'bu';
+                    const isSLSU = uni.id === 'slsu';
+                    const isNEUST = uni.id === 'neust';
+                    const isUCN = uni.id === 'ucn';
+                    const isJRU = uni.id === 'jru';
+                    const isSSU = uni.id === 'ssu';
                     const isActive = location === `/university/${uni.id}`;
                     
                     let itemClass = "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent";
@@ -185,24 +243,39 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                       itemClass = "bg-[#003366] text-white border-[#004080] hover:bg-[#00264d]";
                     } else if (isDLSU) {
                       itemClass = "bg-[#00703c] text-white border-[#008547] hover:bg-[#005a30]";
+                    } else if (isUST) {
+                      itemClass = "bg-[#d97706] dark:bg-[#b45309] text-white border-[#f59e0b] hover:bg-[#b45309] dark:hover:bg-[#92400e]";
                     } else if (isBU) {
                       itemClass = "bg-[#009cb8] text-white border-[#00adc3] hover:bg-[#008ba5]";
+                    } else if (isSLSU) {
+                      itemClass = "bg-[#15803d] text-white border-[#166534] hover:bg-[#166534]";
+                    } else if (isNEUST) {
+                      itemClass = "bg-[#1e40af] text-white border-[#1e3a8a] hover:bg-[#1d4ed8]";
+                    } else if (isUCN) {
+                      itemClass = "bg-[#0f766e] text-white border-[#115e59] hover:bg-[#115e59]";
+                    } else if (isJRU) {
+                      itemClass = "bg-[#9a3412] text-white border-[#7c2d12] hover:bg-[#7c2d12]";
+                    } else if (isSSU) {
+                      itemClass = "bg-[#4338ca] text-white border-[#3730a3] hover:bg-[#3730a3]";
                     } else if (isActive) {
                       itemClass = "bg-primary text-primary-foreground border-primary";
                     }
 
                     return (
                       <Link key={uni.id} href={`/university/${uni.id}`}>
-                        <span className={cn(
-                          "flex items-start gap-3 rounded-md px-3 py-2.5 transition-all cursor-pointer shadow-sm border",
-                          itemClass
-                        )}>
+                        <span 
+                          title={uni.name}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3.5 py-2.5 transition-all cursor-pointer shadow-xs border text-xs font-semibold whitespace-nowrap overflow-hidden hover:scale-[1.01] active:scale-[0.99] min-h-[42px]",
+                            itemClass
+                          )}
+                        >
                           <UniversityLogo
                             universityId={uni.id}
                             alt={`${uni.shortName} logo`}
-                            className="h-5 w-5 shrink-0 object-contain mt-0.5"
+                            className="h-5 w-5 shrink-0 object-contain"
                           />
-                          <span className="text-xs font-bold leading-normal break-words">{uni.name}</span>
+                          <span className="truncate flex-1 text-[12.5px] font-bold tracking-tight">{uni.name}</span>
                         </span>
                       </Link>
                     );
@@ -230,14 +303,16 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
               <div className="flex items-center justify-between">
               <Dialog open={changelogOpen} onOpenChange={setChangelogOpen}>
                 <DialogTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 px-2 py-1.5 h-auto rounded-md cursor-pointer transition-colors"
-                  >
-                    <History className="h-3.5 w-3.5" />
-                    Changelog
-                  </Button>
+                  <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="inline-block">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 px-2 py-1.5 h-auto rounded-md cursor-pointer transition-colors"
+                    >
+                      <History className="h-3.5 w-3.5" />
+                      Changelog
+                    </Button>
+                  </motion.div>
                 </DialogTrigger>
                 <DialogContent className="max-w-md md:max-w-lg">
                   <DialogHeader>
@@ -298,31 +373,66 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
       {/* Main Content */}
       <div className={cn("flex-1 flex flex-col min-w-0", !hideSidebar && "md:pl-64")}>
         <header className="sticky top-0 z-30 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-          <div className="flex h-16 items-center px-4 md:px-6">
+          <div className="flex h-16 items-center px-4 md:px-6 gap-3">
             {!hideSidebar && (
               <Button
                 variant="ghost"
                 size="icon"
-                className="mr-2 md:hidden"
+                className="mr-1 md:hidden shrink-0"
                 onClick={() => setSidebarOpen(true)}
               >
                 <Menu className="h-5 w-5" />
               </Button>
             )}
-            <div className="ml-auto flex items-center space-x-2 sm:space-x-3">
-              {/* Settings Button beside Profile / Auth */}
+
+            {/* Rolling Announcement Ticker */}
+            <div className="flex-1 min-w-0 max-w-2xl mx-auto hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full bg-muted/40 hover:bg-muted/70 border border-border/70 text-xs overflow-hidden transition-colors">
+              <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} className="shrink-0 flex">
+                <button
+                  type="button"
+                  onClick={() => setChangelogOpen(true)}
+                  className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-full bg-primary/15 text-primary font-bold text-[10.5px] tracking-wide uppercase hover:bg-primary/25 transition-colors cursor-pointer shadow-2xs"
+                  title="View full updates & timeline"
+                >
+                  <Megaphone className="h-3 w-3 text-primary animate-pulse" />
+                  <span>Updates</span>
+                </button>
+              </motion.div>
+
+              <div 
+                onClick={() => setChangelogOpen(true)} 
+                className="overflow-hidden whitespace-nowrap cursor-pointer flex-1 relative mask-fade-edges"
+                title="Click to view update details and application timelines"
+              >
+                <div 
+                  className="animate-marquee inline-flex items-center gap-8 text-muted-foreground hover:text-foreground transition-colors font-medium text-[11.5px]"
+                  onAnimationIteration={() => setTickerCycle((c) => c + 1)}
+                >
+                  {tickerItems.concat(tickerItems).map((item, idx) => (
+                    <span key={idx} className="inline-flex items-center gap-8">
+                      <span>{item}</span>
+                      <span className="text-muted-foreground/40">•</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="ml-auto flex items-center space-x-2 sm:space-x-3 shrink-0">
+              {/* Settings Button - Enlarged and Prominent */}
               <Button
-                variant="ghost"
-                size="icon"
+                variant="outline"
+                size="sm"
                 onClick={() => {
                   setSettingsTab("general");
                   setSettingsOpen(true);
                 }}
                 aria-label="Open Settings"
                 title="Settings & Preferences (Appearance, AI Engines, Feedback)"
-                className="h-9 w-9 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                className="h-9 px-3 gap-1.5 rounded-lg border-border/80 text-foreground font-semibold hover:bg-muted/80 hover:text-primary transition-all cursor-pointer shadow-xs"
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-4.5 w-4.5 text-primary" />
+                <span className="text-xs hidden sm:inline">Settings</span>
               </Button>
 
               {!loading && (

@@ -34,6 +34,10 @@ import {
   getActiveAIProvider, 
   setActiveAIProvider, 
   saveStoredApiKeyForProvider, 
+  getStoredApiKeyForProvider,
+  parseCloudflareCredentials,
+  getStoredCloudflareAccountId,
+  saveStoredCloudflareAccountId,
   hasAnyCustomApiKey 
 } from "@/lib/geminiKey";
 import { testAIProviderConnection } from "@/lib/geminiClientService";
@@ -45,6 +49,7 @@ export function AIOnboardingModal() {
   const [tutorialOpen, setTutorialOpen] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>("gemini");
   const [apiKey, setApiKey] = useState("");
+  const [cfAccountId, setCfAccountId] = useState(() => getStoredCloudflareAccountId());
   const [showKey, setShowKey] = useState(false);
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -77,10 +82,21 @@ export function AIOnboardingModal() {
   };
 
   const handleTestKey = async () => {
-    const cleanKey = apiKey.trim().replace(/^["'`]|["'`]$/g, "").trim();
+    let cleanKey = apiKey.trim().replace(/^["'`]|["'`]$/g, "").trim();
     if (!cleanKey) {
-      setTestResult({ success: false, message: `Please paste your ${AI_PROVIDERS[selectedProvider].name} key first.` });
+      setTestResult({ success: false, message: `Please paste your ${AI_PROVIDERS[selectedProvider].name} key or token first.` });
       return;
+    }
+
+    if (selectedProvider === "cloudflare") {
+      const cleanAcc = cfAccountId.trim();
+      if (!cleanAcc && !cleanKey.includes(":")) {
+        setTestResult({ success: false, message: "Please enter your Cloudflare Account ID and API Token." });
+        return;
+      }
+      if (!cleanKey.includes(":") && cleanAcc) {
+        cleanKey = `${cleanAcc}:${cleanKey}`;
+      }
     }
 
     setTestingKey(true);
@@ -90,6 +106,9 @@ export function AIOnboardingModal() {
       const res = await testAIProviderConnection(selectedProvider, cleanKey);
       setTestResult(res);
       if (res.success) {
+        if (selectedProvider === "cloudflare") {
+          saveStoredCloudflareAccountId(cfAccountId.trim());
+        }
         saveStoredApiKeyForProvider(selectedProvider, cleanKey);
         setActiveAIProvider(selectedProvider);
       }
@@ -101,7 +120,13 @@ export function AIOnboardingModal() {
   };
 
   const handleSaveAndContinue = () => {
-    const cleanKey = apiKey.trim().replace(/^["'`]|["'`]$/g, "").trim();
+    let cleanKey = apiKey.trim().replace(/^["'`]|["'`]$/g, "").trim();
+    if (selectedProvider === "cloudflare" && cleanKey && !cleanKey.includes(":") && cfAccountId.trim()) {
+      cleanKey = `${cfAccountId.trim()}:${cleanKey}`;
+    }
+    if (selectedProvider === "cloudflare" && cfAccountId.trim()) {
+      saveStoredCloudflareAccountId(cfAccountId.trim());
+    }
     if (cleanKey) {
       saveStoredApiKeyForProvider(selectedProvider, cleanKey);
       setActiveAIProvider(selectedProvider);
@@ -209,10 +234,10 @@ export function AIOnboardingModal() {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="font-semibold text-foreground">Choose AI Provider:</label>
-              <span className="text-[11px] text-muted-foreground">Google Gemini is recommended</span>
+              <span className="text-[11px] text-muted-foreground">100% Free Tiers (No credit card)</span>
             </div>
-            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-              {(["gemini", "groq", "openai", "openrouter", "deepseek"] as AIProvider[]).map((p) => {
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              {(["gemini", "groq", "cohere", "cloudflare"] as AIProvider[]).map((p) => {
                 const prov = AI_PROVIDERS[p];
                 const isSelected = selectedProvider === p;
                 return (
@@ -221,6 +246,13 @@ export function AIOnboardingModal() {
                     type="button"
                     onClick={() => {
                       setSelectedProvider(p);
+                      if (p === "cloudflare") {
+                        const creds = parseCloudflareCredentials(getStoredApiKeyForProvider("cloudflare") || "");
+                        setCfAccountId(creds.accountId || getStoredCloudflareAccountId());
+                        setApiKey(creds.apiToken);
+                      } else {
+                        setApiKey(getStoredApiKeyForProvider(p) || "");
+                      }
                       setTestResult(null);
                     }}
                     className={`px-2 py-1.5 rounded-lg border text-center transition-all cursor-pointer ${
@@ -229,19 +261,50 @@ export function AIOnboardingModal() {
                         : "border-border hover:border-primary/40 text-muted-foreground"
                     }`}
                   >
-                    <span className="block text-[11px] truncate">{prov.name.split(" ")[0]}</span>
-                    <span className="block text-[9px] opacity-75">{prov.freeTier ? "Free" : "API"}</span>
+                    <span className="block text-[11px] font-semibold truncate">{prov.name.split(" ")[0]}</span>
+                    <span className="block text-[9px] text-emerald-600 dark:text-emerald-400 font-medium">{prov.badge}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
+          {/* Cloudflare Account ID field if Cloudflare is selected */}
+          {selectedProvider === "cloudflare" && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="font-semibold text-foreground text-xs">
+                  Cloudflare Account ID:
+                </label>
+                <span className="text-[10px] text-muted-foreground">
+                  Found in dash.cloudflare.com sidebar
+                </span>
+              </div>
+              <Input
+                type="text"
+                value={cfAccountId}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val.includes(":")) {
+                    const parts = val.split(":");
+                    setCfAccountId(parts[0].trim());
+                    setApiKey(parts[1].trim());
+                  } else {
+                    setCfAccountId(val);
+                  }
+                  setTestResult(null);
+                }}
+                placeholder="e.g. 7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c"
+                className="text-xs font-mono"
+              />
+            </div>
+          )}
+
           {/* Key Input */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="font-semibold text-foreground">
-                Paste {currentMeta.name} API Key:
+                {selectedProvider === "cloudflare" ? "Cloudflare API Token:" : `Paste ${currentMeta.name} API Key:`}
               </label>
               <div className="flex items-center gap-3">
                 <button
@@ -250,7 +313,7 @@ export function AIOnboardingModal() {
                   className="text-primary hover:underline text-[11px] font-medium flex items-center gap-1 cursor-pointer"
                 >
                   <BookOpen className="h-3 w-3" />
-                  View Guide & Tutorial
+                  View Guide &amp; Tutorial
                 </button>
                 <a
                   href={currentMeta.getKeyUrl}

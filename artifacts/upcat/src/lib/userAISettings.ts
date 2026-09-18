@@ -9,6 +9,8 @@ import {
   saveStoredApiKeyForProvider,
   getStoredGroqModel,
   saveStoredGroqModel,
+  getStoredCloudflareAccountId,
+  saveStoredCloudflareAccountId,
   isAutoSwitchAIEnabled,
   setAutoSwitchAIEnabled
 } from "./geminiKey";
@@ -17,6 +19,7 @@ export interface UserAISettingsDoc {
   activeProvider: AIProvider;
   keys: Partial<Record<AIProvider, string>>;
   groqModel?: string;
+  cloudflareAccountId?: string;
   autoSwitchEnabled?: boolean;
   updatedAt?: any;
 }
@@ -27,7 +30,7 @@ export const AI_SETTINGS_SYNC_EVENT = "sulyap_ai_settings_synced";
  * Returns current snapshot of local AI settings
  */
 export function getCurrentLocalAISettings(): UserAISettingsDoc {
-  const providers: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+  const providers: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
   const keys: Partial<Record<AIProvider, string>> = {};
 
   for (const p of providers) {
@@ -39,6 +42,7 @@ export function getCurrentLocalAISettings(): UserAISettingsDoc {
     activeProvider: getActiveAIProvider(),
     keys,
     groqModel: getStoredGroqModel(),
+    cloudflareAccountId: getStoredCloudflareAccountId(),
     autoSwitchEnabled: isAutoSwitchAIEnabled(),
   };
 }
@@ -53,6 +57,7 @@ export async function saveUserAISettingsToAccount(
     activeProvider?: AIProvider;
     providerKey?: { provider: AIProvider; key: string };
     groqModel?: string;
+    cloudflareAccountId?: string;
     autoSwitchEnabled?: boolean;
   }>
 ): Promise<void> {
@@ -76,6 +81,7 @@ export async function saveUserAISettingsToAccount(
       activeProvider: patch?.activeProvider || currentLocal.activeProvider,
       keys: keysToSave,
       groqModel: patch?.groqModel !== undefined ? patch.groqModel : currentLocal.groqModel,
+      cloudflareAccountId: patch?.cloudflareAccountId !== undefined ? patch.cloudflareAccountId : currentLocal.cloudflareAccountId,
       autoSwitchEnabled: patch?.autoSwitchEnabled !== undefined ? patch.autoSwitchEnabled : currentLocal.autoSwitchEnabled,
       updatedAt: serverTimestamp(),
     };
@@ -99,7 +105,7 @@ export async function syncUserAISettingsOnLogin(user: User): Promise<void> {
     const snap = await getDoc(docRef);
 
     const local = getCurrentLocalAISettings();
-    const providers: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+    const providers: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
 
     if (snap.exists()) {
       const data = snap.data() as Partial<UserAISettingsDoc>;
@@ -129,7 +135,12 @@ export async function syncUserAISettingsOnLogin(user: User): Promise<void> {
         saveStoredGroqModel(data.groqModel);
       }
 
-      // 4. Apply auto-switch
+      // 4. Apply Cloudflare Account ID
+      if (data.cloudflareAccountId) {
+        saveStoredCloudflareAccountId(data.cloudflareAccountId);
+      }
+
+      // 5. Apply auto-switch
       if (typeof data.autoSwitchEnabled === "boolean") {
         setAutoSwitchAIEnabled(data.autoSwitchEnabled);
       }
@@ -140,7 +151,7 @@ export async function syncUserAISettingsOnLogin(user: User): Promise<void> {
       }
     } else {
       // First time user on account: if they have any local keys configured, upload them now!
-      const hasAnyLocal = Object.keys(local.keys).length > 0;
+      const hasAnyLocal = Object.keys(local.keys).length > 0 || Boolean(local.cloudflareAccountId);
       if (hasAnyLocal) {
         await saveUserAISettingsToAccount(user);
       }
@@ -169,7 +180,7 @@ export function subscribeUserAISettings(
       (snap) => {
         if (snap.exists()) {
           const data = snap.data() as Partial<UserAISettingsDoc>;
-          const providers: AIProvider[] = ["gemini", "groq", "openai", "openrouter", "deepseek"];
+          const providers: AIProvider[] = ["gemini", "groq", "cohere", "cloudflare"];
 
           if (data.keys) {
             for (const p of providers) {
@@ -186,6 +197,10 @@ export function subscribeUserAISettings(
 
           if (data.groqModel) {
             saveStoredGroqModel(data.groqModel);
+          }
+
+          if (data.cloudflareAccountId) {
+            saveStoredCloudflareAccountId(data.cloudflareAccountId);
           }
 
           if (typeof data.autoSwitchEnabled === "boolean") {

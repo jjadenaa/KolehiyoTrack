@@ -58,7 +58,7 @@ export function getAIQuotaStatus() {
   const hasCustomKey = hasAnyCustomApiKey();
   const info = getActiveApiKeyInfo();
   const quota = getStoredQuota();
-  const remaining = hasCustomKey ? 999 : Math.max(0, DAILY_AI_CREDITS_LIMIT - quota.usedCount);
+  const rawRemaining = hasCustomKey ? null : Math.max(0, DAILY_AI_CREDITS_LIMIT - quota.usedCount);
   const percentage = hasCustomKey ? 0 : Math.min(100, Math.round((quota.usedCount / DAILY_AI_CREDITS_LIMIT) * 100));
 
   // Time until midnight reset
@@ -73,11 +73,12 @@ export function getAIQuotaStatus() {
   return {
     used: quota.usedCount,
     total: hasCustomKey ? "∞" : DAILY_AI_CREDITS_LIMIT,
-    remaining,
+    remaining: hasCustomKey ? "∞" : (rawRemaining ?? 0),
+    remainingCount: rawRemaining,
     percentage,
     resetTimeStr,
-    isExhausted: hasCustomKey ? false : remaining <= 0,
-    isLow: hasCustomKey ? false : (remaining > 0 && remaining <= 5),
+    isExhausted: hasCustomKey ? false : (rawRemaining !== null && rawRemaining <= 0),
+    isLow: hasCustomKey ? false : (rawRemaining !== null && rawRemaining > 0 && rawRemaining <= 5),
     hasCustomKey,
     providerName: info.meta.name,
     providerId: info.provider,
@@ -96,7 +97,7 @@ export function checkCanUseAI(): { allowed: boolean; reason?: string; cooldownMs
   if (!hasCustomKey && quota.usedCount >= DAILY_AI_CREDITS_LIMIT) {
     return {
       allowed: false,
-      reason: `Daily free AI limit of ${DAILY_AI_CREDITS_LIMIT} queries reached! Select an AI choice (Google Gemini, Groq, OpenAI, OpenRouter, DeepSeek) and enter your key to continue with unlimited queries immediately.`,
+      reason: `Daily free AI limit of ${DAILY_AI_CREDITS_LIMIT} queries reached! Select a 100% free AI engine (Google Gemini, Groq, Cohere, Cloudflare Workers AI) and enter your key to continue with unlimited queries immediately.`,
     };
   }
 

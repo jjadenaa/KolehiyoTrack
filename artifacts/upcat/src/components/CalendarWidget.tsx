@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { motion } from "framer-motion";
 import {
   CalendarDays,
   ChevronLeft,
@@ -12,7 +13,8 @@ import {
   MapPin,
   Calendar as CalendarIcon,
   BellRing,
-  ListOrdered
+  ListOrdered,
+  Radio
 } from "lucide-react";
 import {
   Dialog,
@@ -25,6 +27,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/context/AuthContext";
+import {
+  getLocalExamDates,
+  subscribeUserExamDates,
+  formatCustomDateDisplay,
+  DEFAULT_UNIVERSITY_EXAM_DATES
+} from "@/lib/userUniversities";
 
 export interface CustomEvent {
   id: string;
@@ -40,7 +49,7 @@ export interface CustomEvent {
 const DEFAULT_CET_EVENTS: CustomEvent[] = [
   {
     id: "preset-admu-deadline",
-    title: "Ateneo (ACET) Application Period Closes",
+    title: "Ateneo (ACET) Application Deadline",
     date: "2026-08-24",
     time: "05:00 PM",
     category: "deadline",
@@ -49,23 +58,73 @@ const DEFAULT_CET_EVENTS: CustomEvent[] = [
     isPreset: true,
   },
   {
-    id: "preset-dlsu-exam",
-    title: "DLSU DCAT Testing Schedule",
-    date: "2026-09-15",
-    time: "08:00 AM",
-    category: "exam",
-    description: "De La Salle University College Admission Test.",
-    location: "DLSU Manila Campus",
+    id: "preset-dlsu-deadline",
+    title: "DLSU (DCAT) Application Deadline",
+    date: "2026-09-30",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "De La Salle University online admission application deadline.",
+    location: "DLSU Portal",
     isPreset: true,
   },
   {
-    id: "preset-bucet-exam",
-    title: "BUCET 2027 Official Exam Date",
-    date: "2026-11-19",
-    time: "07:30 AM",
-    category: "exam",
-    description: "Bicol University College Entrance Test (BUCET) Examination Day.",
-    location: "Bicol University Campuses",
+    id: "preset-dost-deadline",
+    title: "DOST-SEI Scholarship Extended Deadline",
+    date: "2026-09-24",
+    time: "11:59 PM",
+    category: "deadline",
+    description: "Extended deadline to submit DOST-SEI Undergraduate Scholarship application.",
+    location: "DOST E-Scholarship Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-up-grades-deadline",
+    title: "UP Grades Submission 3rd Extended Deadline",
+    date: "2026-09-21",
+    time: "11:59 PM",
+    category: "deadline",
+    description: "The University of the Philippines (UP) extended deadline for submission of grades for AY 2027-2028.",
+    location: "UPCAT Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-adu-open",
+    title: "AdU (Adamson) Applications Open",
+    date: "2026-09-17",
+    time: "08:00 AM",
+    category: "other",
+    description: "Adamson University (AdU) online applications open starting Sept 17 - TBA.",
+    location: "AdU Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-benilde-deadline",
+    title: "DLSU-Benilde Application Period Closes",
+    date: "2027-03-17",
+    time: "11:59 PM",
+    category: "deadline",
+    description: "De La Salle-College of Saint Benilde (DLSU-Benilde) application period (Sept 15, 2026 - March 17, 2027).",
+    location: "DLSU-Benilde Admissions Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-plm-deadline",
+    title: "PLM Application Deadline",
+    date: "2026-09-30",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "Pamantasan ng Lungsod ng Maynila freshman application deadline.",
+    location: "PLM Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-pnu-deadline",
+    title: "PNU Application Period Closes",
+    date: "2026-10-23",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "Philippine Normal University online application submission deadline.",
+    location: "PNU Online Applicants Portal",
     isPreset: true,
   },
   {
@@ -79,23 +138,153 @@ const DEFAULT_CET_EVENTS: CustomEvent[] = [
     isPreset: true,
   },
   {
-    id: "preset-nu-open",
-    title: "National University (NU) Registration Opens",
-    date: "2026-08-08",
-    time: "08:00 AM",
+    id: "preset-naap-deadline",
+    title: "NAAP Aviation Registration Closes",
+    date: "2026-10-31",
+    time: "05:00 PM",
     category: "deadline",
-    description: "National University admission registration opens for incoming freshmen.",
-    location: "NU Quest Portal",
+    description: "National Aviation Academy of the Philippines registration deadline.",
+    location: "CAAP Portal",
     isPreset: true,
   },
   {
-    id: "preset-dost-deadline",
-    title: "DOST-SEI Scholarship Application Deadline",
+    id: "preset-dlsp-open",
+    title: "DLSP Applications Open",
+    date: "2026-10-05",
+    time: "08:00 AM",
+    category: "other",
+    description: "Dalubhasaan ng Lungsod ng San Pablo (DLSP) online applications open for AY 2027-2028.",
+    location: "DLSP Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-evsu-open",
+    title: "EVSU Applications Open",
+    date: "2026-11-03",
+    time: "08:00 AM",
+    category: "other",
+    description: "Eastern Visayas State University (EVSU) online applications open for AY 2027-2028.",
+    location: "EVSU Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-mseuf-open",
+    title: "MSEUF Applications Open",
     date: "2026-09-17",
+    time: "08:00 AM",
+    category: "other",
+    description: "Manuel S. Enverga University Foundation (MSEUF) applications open.",
+    location: "MSEUF Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-plp-open",
+    title: "PLP Applications Open",
+    date: "2026-09-21",
+    time: "08:00 AM",
+    category: "other",
+    description: "Pamantasan ng Lungsod ng Pasig (PLP) application period opens.",
+    location: "PLP Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-bisu-deadline",
+    title: "BISU Application Period Closes",
+    date: "2026-11-27",
     time: "11:59 PM",
     category: "deadline",
-    description: "Final deadline to submit DOST-SEI Undergraduate Scholarship application.",
-    location: "DOST E-Scholarship Portal",
+    description: "Bohol Island State University (BISU) application deadline for AY 2027-2028.",
+    location: "BISU Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-vsu-deadline",
+    title: "VSU Application Period Closes",
+    date: "2026-11-14",
+    time: "11:59 PM",
+    category: "deadline",
+    description: "Visayas State University (VSU) application deadline for AY 2027-2028.",
+    location: "VSU Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-dlsu-lipa-open",
+    title: "DLSU-Lipa Applications Open",
+    date: "2026-09-07",
+    time: "08:00 AM",
+    category: "other",
+    description: "De La Salle Lipa (DLSU-Lipa) applications open starting Sept 7 - TBA.",
+    location: "DLSU-Lipa Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-cspc-deadline",
+    title: "CSPC Application Period Closes",
+    date: "2026-10-31",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "Camarines Sur Polytechnic Colleges (CSPC) application deadline.",
+    location: "CSPC Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-bulsu-deadline",
+    title: "BulSU Application Deadline",
+    date: "2026-11-27",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "Bulacan State University college admission application deadline.",
+    location: "BulSU Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-bucet-exam",
+    title: "BUCET 2027 Official Exam Date",
+    date: "2026-11-19",
+    time: "07:30 AM",
+    category: "exam",
+    description: "Bicol University College Entrance Test (BUCET) Examination Day.",
+    location: "Bicol University Campuses",
+    isPreset: true,
+  },
+  {
+    id: "preset-slsu-deadline",
+    title: "Southern Luzon State University (SLSU) Application Deadline",
+    date: "2026-12-03",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "Southern Luzon State University freshman application deadline.",
+    location: "SLSU Admissions Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-neust-deadline",
+    title: "Nueva Ecija Univ of Science & Tech (NEUST) Application Deadline",
+    date: "2026-11-30",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "Nueva Ecija University of Science and Technology admission deadline.",
+    location: "NEUST Admission Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-ucn-deadline",
+    title: "University of Camarines Norte (UCN) Application Deadline",
+    date: "2026-10-30",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "University of Camarines Norte application deadline.",
+    location: "UCN Admissions",
+    isPreset: true,
+  },
+  {
+    id: "preset-ssu-deadline",
+    title: "Sorsogon State University (SSU) Application Deadline",
+    date: "2026-12-04",
+    time: "05:00 PM",
+    category: "deadline",
+    description: "Sorsogon State University admission application deadline.",
+    location: "SSU Admissions Portal",
     isPreset: true,
   },
   {
@@ -108,26 +297,39 @@ const DEFAULT_CET_EVENTS: CustomEvent[] = [
     location: "USTET Portal",
     isPreset: true,
   },
-  {
-    id: "preset-pnu-deadline",
-    title: "PNU Application Period Closes",
-    date: "2026-10-23",
-    time: "05:00 PM",
-    category: "deadline",
-    description: "Philippine Normal University online application submission deadline.",
-    location: "PNU Online Applicants Portal",
-    isPreset: true,
-  },
 ];
 
 const LOCAL_STORAGE_KEY = "kolehiyotrack_user_calendar_events";
 
+const UNIVERSITY_NAMES: Record<string, string> = {
+  upcat: "UP (UPCAT)",
+  ateneo: "Ateneo (ACET)",
+  dlsu: "DLSU (DCAT)",
+  ust: "UST (USTET)",
+  bu: "Bicol University (BUCET)",
+  slsu: "Southern Luzon State University (SLSU)",
+  neust: "Nueva Ecija Univ of Science & Tech (NEUST)",
+  ucn: "University of Camarines Norte (UCN)",
+  jru: "Jose Rizal University (JRU)",
+  ssu: "Sorsogon State University (SSU)",
+};
+
 export function CalendarWidget() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [selectedDateStr, setSelectedDateStr] = useState<string>(
     new Date().toISOString().split("T")[0]
   );
+
+  const [userExamDates, setUserExamDates] = useState<Record<string, string>>(() => getLocalExamDates());
+
+  // Listen for real-time exam date changes set in university pages or dashboard
+  useEffect(() => {
+    return subscribeUserExamDates(user, (dates) => {
+      setUserExamDates(dates);
+    });
+  }, [user]);
 
   const [userEvents, setUserEvents] = useState<CustomEvent[]>(() => {
     try {
@@ -150,8 +352,25 @@ export function CalendarWidget() {
     }
   }, [userEvents]);
 
-  // Combine default preset events with user custom events
-  const allEvents = [...DEFAULT_CET_EVENTS, ...userEvents];
+  // Convert live userExamDates into live calendar exam events
+  const liveExamEvents: CustomEvent[] = Object.entries(userExamDates)
+    .filter(([_, dateStr]) => Boolean(dateStr && dateStr.trim()))
+    .map(([uniId, dateStr]) => {
+      const uName = UNIVERSITY_NAMES[uniId] || uniId.toUpperCase();
+      return {
+        id: `user-exam-${uniId}`,
+        title: `${uName} Scheduled Exam Date`,
+        date: dateStr.trim(),
+        time: "08:00 AM",
+        category: "exam" as const,
+        description: `Your confirmed test schedule for ${uName}. Good luck, Isko/Iska!`,
+        location: `${uName} Testing Center`,
+        isPreset: true,
+      };
+    });
+
+  // Combine default preset events, live user university exam dates, and user custom events
+  const allEvents = [...DEFAULT_CET_EVENTS, ...liveExamEvents, ...userEvents];
 
   // Add Custom Event Dialog state
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -251,32 +470,38 @@ export function CalendarWidget() {
     <div className="space-y-3 w-full">
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
-          <CalendarDays className="h-5 w-5 text-primary" />
-          Calendar
-        </h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-xl font-bold tracking-tight flex items-center gap-2">
+            <CalendarDays className="h-5 w-5 text-primary" />
+            Calendar
+          </h2>
+        </div>
         <div className="flex items-center gap-1.5">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => setUpcomingDialogOpen(true)}
-            className="gap-1 font-semibold text-xs h-8 px-2.5"
-            title="View all upcoming CET dates"
-          >
-            <ListOrdered className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">Schedule</span>
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              setNewDate(selectedDateStr);
-              setAddDialogOpen(true);
-            }}
-            className="gap-1 font-semibold text-xs h-8 px-2.5"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Add Event
-          </Button>
+          <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} className="inline-block">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setUpcomingDialogOpen(true)}
+              className="gap-1 font-semibold text-xs h-8 px-2.5 cursor-pointer"
+              title="View all upcoming CET dates"
+            >
+              <ListOrdered className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Schedule</span>
+            </Button>
+          </motion.div>
+          <motion.div whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }} className="inline-block">
+            <Button
+              size="sm"
+              onClick={() => {
+                setNewDate(selectedDateStr);
+                setAddDialogOpen(true);
+              }}
+              className="gap-1 font-semibold text-xs h-8 px-2.5 cursor-pointer"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Event
+            </Button>
+          </motion.div>
         </div>
       </div>
 
