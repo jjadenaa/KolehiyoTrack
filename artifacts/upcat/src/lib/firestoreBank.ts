@@ -5,10 +5,10 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { BankQuestion, getBankQuestions, saveBankQuestions, getBankUpdatedAt, getUsedIds, saveUsedIds } from "@/lib/questionBank";
+import { BankQuestion, getBankQuestions, saveBankQuestions, getBankUpdatedAt, getUsedIds, saveUsedIds, normalizeUniversityId } from "@/lib/questionBank";
 
 function bankRef(uid: string, universityId: string) {
-  return doc(db, "user_sessions", uid, "universities", universityId, "quizzes", "questionbank");
+  return doc(db, "user_sessions", uid, "universities", normalizeUniversityId(universityId), "quizzes", "questionbank");
 }
 
 /** Recursively strip all undefined values from an object. Firestore rejects undefined. */

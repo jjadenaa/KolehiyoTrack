@@ -3,7 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { motion } from "framer-motion";
-import { getLocalAddedUniversities, subscribeUserAddedUniversities, saveUserAddedUniversities, getLocalExamDates, subscribeUserExamDates, calculateDaysRemaining } from "@/lib/userUniversities";
+import { getLocalAddedUniversities, subscribeUserAddedUniversities, saveUserAddedUniversities, getLocalExamDates, subscribeUserExamDates, calculateDaysRemaining, TRACKED_UNIVERSITIES } from "@/lib/userUniversities";
 import { getActiveApplicationTimelines, STUDY_TIPS_POOL } from "@/lib/applicationTimelines";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -34,18 +34,7 @@ import { AIOnboardingModal } from "@/components/AIOnboardingModal";
 import { SettingsModal } from "@/components/SettingsModal";
 import { UniversityLogo } from "@/components/UniversityLogo";
 
-const UNIVERSITIES = [
-  { id: 'upcat', name: 'University of the Philippines - (UPCAT 2028)', shortName: 'UPCAT', date: 'TBA' },
-  { id: 'ateneo', name: 'Ateneo de Manila University - (ACET 2027)', shortName: 'ACET', date: 'TBA' },
-  { id: 'dlsu', name: 'De La Salle University - (DCAT 2027)', shortName: 'DCAT', date: 'Sept 5 – Dec 6, 2026' },
-  { id: 'ust', name: 'University of Santo Tomas - (USTET 2027)', shortName: 'USTET', date: 'Oct 3, 2026 – Jan 31, 2027' },
-  { id: 'bu', name: 'Bicol University - (BUCET 2027)', shortName: 'BUCET', date: 'Aug 20 – Dec 6, 2026' },
-  { id: 'slsu', name: 'Southern Luzon State University - (SLSU 2027)', shortName: 'SLSU', date: 'Sept 10 – Dec 3, 2026' },
-  { id: 'neust', name: 'Nueva Ecija Univ of Science & Tech - (NEUST 2027)', shortName: 'NEUST', date: 'Sept 3 – Nov 30, 2026' },
-  { id: 'ucn', name: 'University of Camarines Norte - (UCN 2027)', shortName: 'UCN', date: 'Sept 7 – Oct 30, 2026' },
-  { id: 'jru', name: 'Jose Rizal University - (JRU 2027)', shortName: 'JRU', date: 'Sept 7 – TBA, 2026' },
-  { id: 'ssu', name: 'Sorsogon State University - (SSU 2027)', shortName: 'SSU', date: 'Sept 7 – Dec 4, 2026' }
-];
+const UNIVERSITIES = TRACKED_UNIVERSITIES;
 
 export function Layout({ children, hideSidebar = false }: { children: React.ReactNode; hideSidebar?: boolean }) {
   const { user, loading, signInWithGoogle, signOutUser } = useAuth();
@@ -82,6 +71,8 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
     // 0. Urgent Official Announcements
     items.push(`🚨 The University of the Philippines (UP) has EXTENDED, for the third time, the deadline for submission of grades for Academic Year 2027-2028. The new deadline is set on September 21, 2026.`);
     items.push(`📢 DOST-SEI Scholarship application deadline extended to September 24, 2026.`);
+    items.push(`📢 Ateneo de Davao University (ADDU) is now accepting online applications for AY 2027-2028.`);
+    items.push(`📢 Kolehiyo ng Lungsod ng Dasmariñas (KLD) opens applications from Sept 21 to Oct 2, 2026.`);
     items.push(`📢 Adamson University (AdU) application open: Sept 17 - TBA.`);
     items.push(`📢 DLSU-Benilde application period: Sept 15, 2026 - March 17, 2027.`);
 
@@ -104,7 +95,7 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
     items.push(`💡 Tips: ${randomTip}`);
 
     // 4. Feature updates item
-    items.push(`🚀 ${CURRENT_VERSION}: Added SLSU, NEUST, UCN, JRU & SSU support, live calendar countdowns & prompt copying`);
+    items.push(`🚀 ${CURRENT_VERSION}: Live calendar countdowns, smart filters & prompt copying`);
 
     // 5. Permanent social media handle
     items.push(`📱 Follow our social media pages: @kolehiyotrack on TikTok`);
@@ -229,11 +220,6 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                     const isDLSU = uni.id === 'dlsu';
                     const isUST = uni.id === 'ust';
                     const isBU = uni.id === 'bu';
-                    const isSLSU = uni.id === 'slsu';
-                    const isNEUST = uni.id === 'neust';
-                    const isUCN = uni.id === 'ucn';
-                    const isJRU = uni.id === 'jru';
-                    const isSSU = uni.id === 'ssu';
                     const isActive = location === `/university/${uni.id}`;
                     
                     let itemClass = "text-muted-foreground hover:bg-muted hover:text-foreground border-transparent";
@@ -247,16 +233,6 @@ export function Layout({ children, hideSidebar = false }: { children: React.Reac
                       itemClass = "bg-[#d97706] dark:bg-[#b45309] text-white border-[#f59e0b] hover:bg-[#b45309] dark:hover:bg-[#92400e]";
                     } else if (isBU) {
                       itemClass = "bg-[#009cb8] text-white border-[#00adc3] hover:bg-[#008ba5]";
-                    } else if (isSLSU) {
-                      itemClass = "bg-[#15803d] text-white border-[#166534] hover:bg-[#166534]";
-                    } else if (isNEUST) {
-                      itemClass = "bg-[#1e40af] text-white border-[#1e3a8a] hover:bg-[#1d4ed8]";
-                    } else if (isUCN) {
-                      itemClass = "bg-[#0f766e] text-white border-[#115e59] hover:bg-[#115e59]";
-                    } else if (isJRU) {
-                      itemClass = "bg-[#9a3412] text-white border-[#7c2d12] hover:bg-[#7c2d12]";
-                    } else if (isSSU) {
-                      itemClass = "bg-[#4338ca] text-white border-[#3730a3] hover:bg-[#3730a3]";
                     } else if (isActive) {
                       itemClass = "bg-primary text-primary-foreground border-primary";
                     }

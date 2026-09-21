@@ -14,20 +14,93 @@ const DEFAULT_UNIVERSITIES: string[] = [
   'bu'
 ];
 
+export interface TrackedUniversity {
+  id: string;
+  name: string;
+  shortName: string;
+  date: string;
+  applyUrl: string;
+  description: string;
+}
+
+export const TRACKED_UNIVERSITIES: TrackedUniversity[] = [
+  {
+    id: 'upcat',
+    name: 'University of the Philippines - (UPCAT 2028)',
+    shortName: 'UPCAT',
+    date: 'TBA',
+    applyUrl: 'https://upcat2026.up.edu.ph/',
+    description: ''
+  },
+  {
+    id: 'ateneo',
+    name: 'Ateneo de Manila University - (ACET 2027)',
+    shortName: 'ACET',
+    date: 'Sept 19 – 27, 2026',
+    applyUrl: 'https://ateneo.admissions.ph/',
+    description: ''
+  },
+  {
+    id: 'dlsu',
+    name: 'De La Salle University - (DCAT 2027)',
+    shortName: 'DCAT',
+    date: 'Sept 5 – Dec 6, 2026',
+    applyUrl: 'https://applyarchershub.dlsu.edu.ph/ApplicationLandingPage/index/DLSU',
+    description: ''
+  },
+  {
+    id: 'ust',
+    name: 'University of Santo Tomas - (USTET 2027)',
+    shortName: 'USTET',
+    date: 'Oct 3, 2026 – Jan 31, 2027',
+    applyUrl: 'https://ustet.ust.edu.ph/',
+    description: ''
+  },
+  {
+    id: 'bu',
+    name: 'Bicol University - (BUCET 2027)',
+    shortName: 'BUCET',
+    date: 'Aug 20 – Dec 6, 2026',
+    applyUrl: 'https://ibu.bicol-u.edu.ph/',
+    description: ''
+  }
+];
+
+export function getUniversityBrandColor(id: string): string {
+  switch (id) {
+    case 'upcat': return 'text-primary';
+    case 'ateneo': return 'text-[#003366]';
+    case 'dlsu': return 'text-[#00703c]';
+    case 'ust': return 'text-amber-500 dark:text-amber-400';
+    case 'bu': return 'text-[#009cb8]';
+    default: return 'text-primary';
+  }
+}
+
 export function getLocalAddedUniversities(): string[] {
+  const allowedIds = new Set(TRACKED_UNIVERSITIES.map(u => u.id));
   try {
     const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (!saved) return DEFAULT_UNIVERSITIES;
     const parsed = JSON.parse(saved);
-    return Array.isArray(parsed) ? parsed : DEFAULT_UNIVERSITIES;
+    if (Array.isArray(parsed)) {
+      const valid = parsed.filter(id => allowedIds.has(id));
+      if (valid.length !== parsed.length) {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(valid.length > 0 ? valid : DEFAULT_UNIVERSITIES));
+      }
+      return valid.length > 0 ? valid : DEFAULT_UNIVERSITIES;
+    }
+    return DEFAULT_UNIVERSITIES;
   } catch (err) {
     return DEFAULT_UNIVERSITIES;
   }
 }
 
 export function setLocalAddedUniversities(ids: string[]) {
+  const allowedIds = new Set(TRACKED_UNIVERSITIES.map(u => u.id));
+  const cleanIds = ids.filter(id => allowedIds.has(id));
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(ids));
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleanIds.length > 0 ? cleanIds : DEFAULT_UNIVERSITIES));
     window.dispatchEvent(new Event(UNIVERSITIES_CHANGED_EVENT));
   } catch (err) {
     console.error("Failed to save added universities locally:", err);
@@ -35,11 +108,13 @@ export function setLocalAddedUniversities(ids: string[]) {
 }
 
 export async function saveUserAddedUniversities(user: User | null, ids: string[]) {
-  setLocalAddedUniversities(ids);
+  const allowedIds = new Set(TRACKED_UNIVERSITIES.map(u => u.id));
+  const cleanIds = ids.filter(id => allowedIds.has(id));
+  setLocalAddedUniversities(cleanIds);
   if (user) {
     try {
       const profileDocRef = doc(db, "user_sessions", user.uid, "settings", "profile");
-      await setDoc(profileDocRef, { addedUniversities: ids, updatedAt: Date.now() }, { merge: true });
+      await setDoc(profileDocRef, { addedUniversities: cleanIds.length > 0 ? cleanIds : DEFAULT_UNIVERSITIES, updatedAt: Date.now() }, { merge: true });
     } catch (err) {
       console.error("Failed to sync added universities to Firestore:", err);
     }
@@ -49,11 +124,21 @@ export async function saveUserAddedUniversities(user: User | null, ids: string[]
 // ─── Custom Exam Dates Storage & Sync ─────────────────────────────────────────
 
 export function getLocalExamDates(): Record<string, string> {
+  const allowedIds = new Set(TRACKED_UNIVERSITIES.map(u => u.id));
   try {
     const saved = localStorage.getItem(LOCAL_STORAGE_DATES_KEY);
     if (!saved) return {};
     const parsed = JSON.parse(saved);
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (parsed && typeof parsed === "object") {
+      const clean: Record<string, string> = {};
+      for (const [k, v] of Object.entries(parsed)) {
+        if (allowedIds.has(k) && typeof v === "string") {
+          clean[k] = v;
+        }
+      }
+      return clean;
+    }
+    return {};
   } catch (err) {
     return {};
   }
@@ -97,11 +182,6 @@ export const DEFAULT_UNIVERSITY_EXAM_DATES: Record<string, { label: string; defa
   dlsu: { label: "Sept 5 – Dec 6, 2026", defaultTargetDate: "2026-09-05" },
   ust: { label: "Oct 3, 2026 – Jan 31, 2027", defaultTargetDate: "2026-10-03" },
   bu: { label: "Aug 20 – Dec 6, 2026", defaultTargetDate: "2026-08-20" },
-  slsu: { label: "Sept 10 – Dec 3, 2026", defaultTargetDate: "2026-12-03" },
-  neust: { label: "Sept 3 – Nov 30, 2026", defaultTargetDate: "2026-11-30" },
-  ucn: { label: "Sept 7 – Oct 30, 2026", defaultTargetDate: "2026-10-30" },
-  jru: { label: "Sept 7, 2026 – TBA" },
-  ssu: { label: "Sept 7 – Dec 4, 2026", defaultTargetDate: "2026-12-04" },
 };
 
 export function calculateDaysRemaining(dateInput?: string, uniId?: string): number | null {
@@ -301,15 +381,18 @@ export function subscribeUserAddedUniversities(
   const profileDocRef = doc(db, "user_sessions", user.uid, "settings", "profile");
 
   const unsubFirestore = onSnapshot(profileDocRef, (snap) => {
+    const allowedIds = new Set(TRACKED_UNIVERSITIES.map(u => u.id));
     if (snap.exists() && Array.isArray(snap.data()?.addedUniversities)) {
-      const remoteIds: string[] = snap.data().addedUniversities;
+      const rawIds: string[] = snap.data().addedUniversities;
+      const remoteIds = rawIds.filter(id => allowedIds.has(id));
+      const cleanIds = remoteIds.length > 0 ? remoteIds : DEFAULT_UNIVERSITIES;
       const localSaved = localStorage.getItem(LOCAL_STORAGE_KEY);
 
-      if (localSaved !== JSON.stringify(remoteIds)) {
-        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(remoteIds));
+      if (localSaved !== JSON.stringify(cleanIds)) {
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(cleanIds));
         window.dispatchEvent(new Event(UNIVERSITIES_CHANGED_EVENT));
       }
-      onSync(remoteIds);
+      onSync(cleanIds);
     } else {
       // Remote profile doc does not exist yet for this account; initialize with DEFAULT_UNIVERSITIES
       setDoc(profileDocRef, { addedUniversities: DEFAULT_UNIVERSITIES, updatedAt: Date.now() }, { merge: true }).catch(console.error);

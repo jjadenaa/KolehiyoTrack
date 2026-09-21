@@ -26,9 +26,9 @@ export const CHANGELOG_DATA: ChangelogItem[] = [
         title: "Added ACET Notebook Support",
         description: "You may now use Gemini Notebook to generate questions for ACET."
       },
-       {
-        title: "UI Improvemnt",
-        description: "Added announcement tabs and filter elements to remove unessecary clusters."
+      {
+        title: "UI Improvements",
+        description: "Added announcement tabs and filter controls to remove unnecessary cluster."
       }
     ]
   },

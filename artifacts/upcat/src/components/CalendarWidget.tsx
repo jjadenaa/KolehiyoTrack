@@ -228,6 +228,36 @@ const DEFAULT_CET_EVENTS: CustomEvent[] = [
     isPreset: true,
   },
   {
+    id: "preset-addu-open",
+    title: "Ateneo de Davao (ADDU) Applications Open",
+    date: "2026-09-18",
+    time: "08:00 AM",
+    category: "other",
+    description: "Ateneo de Davao University (ADDU) is NOW ACCEPTING online applications for Incoming First-Year Students for AY 2027-2028 (Deadline: TBA).",
+    location: "ADDU Admissions Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-kld-open",
+    title: "KLD (Dasmarinas) Applications Open",
+    date: "2026-09-21",
+    time: "08:00 AM",
+    category: "other",
+    description: "Kolehiyo ng Lungsod ng Dasmariñas (KLD) opens online applications for Incoming First-Year and Transferee Students for AY 2027-2028.",
+    location: "KLD Portal",
+    isPreset: true,
+  },
+  {
+    id: "preset-kld-deadline",
+    title: "KLD (Dasmarinas) Application Deadline",
+    date: "2026-10-02",
+    time: "11:59 PM",
+    category: "deadline",
+    description: "Kolehiyo ng Lungsod ng Dasmariñas (KLD) application period closes (Sept 21 - Oct 2, 2026).",
+    location: "KLD Portal",
+    isPreset: true,
+  },
+  {
     id: "preset-bulsu-deadline",
     title: "BulSU Application Deadline",
     date: "2026-11-27",
@@ -307,11 +337,6 @@ const UNIVERSITY_NAMES: Record<string, string> = {
   dlsu: "DLSU (DCAT)",
   ust: "UST (USTET)",
   bu: "Bicol University (BUCET)",
-  slsu: "Southern Luzon State University (SLSU)",
-  neust: "Nueva Ecija Univ of Science & Tech (NEUST)",
-  ucn: "University of Camarines Norte (UCN)",
-  jru: "Jose Rizal University (JRU)",
-  ssu: "Sorsogon State University (SSU)",
 };
 
 export function CalendarWidget() {

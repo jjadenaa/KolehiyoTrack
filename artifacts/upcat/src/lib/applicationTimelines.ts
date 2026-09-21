@@ -251,6 +251,31 @@ export const APPLICATION_TIMELINES: ApplicationTimeline[] = [
     closeDate: new Date("2026-10-31T23:59:59"),
     applyUrl: "https://cspc.edu.ph/",
   },
+  {
+    id: "addu",
+    shortName: "ADDU",
+    fullName: "Ateneo de Davao University",
+    openStr: "September 18, 2026",
+    closeStr: "TBA",
+    openDate: new Date("2026-09-18T00:00:00"),
+    applyUrl: "https://www.addu.edu.ph/",
+    institutionType: "Private",
+    islandGroup: "Mindanao",
+    region: "Region XI",
+  },
+  {
+    id: "kld",
+    shortName: "KLD",
+    fullName: "Kolehiyo ng Lungsod ng Dasmariñas",
+    openStr: "September 21, 2026",
+    closeStr: "October 2, 2026",
+    openDate: new Date("2026-09-21T00:00:00"),
+    closeDate: new Date("2026-10-02T23:59:59"),
+    applyUrl: "https://kld.edu.ph/",
+    institutionType: "Public",
+    islandGroup: "Luzon",
+    region: "Region IV-A",
+  },
 ];
 
 export function getActiveApplicationTimelines(): ApplicationTimeline[] {

@@ -6,7 +6,20 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Checkbox } from "@/components/ui/checkbox";
-import { addBankQuestions, deleteBankQuestion, BankQuestion, parseRawQuestionBankText, getBannedQuestions, unbanQuestion } from "@/lib/questionBank";
+import {
+  addBankQuestions,
+  deleteBankQuestion,
+  BankQuestion,
+  parseRawQuestionBankText,
+  getBannedQuestions,
+  unbanQuestion,
+  resetBannedQuestions,
+  clearPastQuizHistory,
+  unbanAllQuestions,
+  getQuizzedRepeatBannedQuestions,
+  removePastQuizQuestion,
+  PastQuizQuestion,
+} from "@/lib/questionBank";
 import { SUBJECT_LABELS, getAvailableSubjectsForUniversity, getDefaultItemCounts } from "@/lib/format";
 import { SmartText } from "@/components/SmartText";
 import { AILimitCounter } from "@/components/AILimitCounter";
@@ -37,14 +50,18 @@ import {
   FileCode,
   BookOpen,
   ExternalLink,
+  RotateCcw,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { TRACKED_UNIVERSITIES } from "@/lib/userUniversities";
 
 export interface AIQuestionBankStudioProps {
   universityId: string;
   onQuestionsAdded: () => void;
   open?: boolean;
   onClose?: () => void;
+  testItemCounts?: Record<string, number>;
 }
 
 // ─── Direct Number Input (no mouse wheel scroll, direct typing & auto select) ───
@@ -110,6 +127,7 @@ export function AIQuestionBankStudio({
   onQuestionsAdded,
   open = true,
   onClose,
+  testItemCounts,
 }: AIQuestionBankStudioProps) {
   const [activeTab, setActiveTab] = useState<"notebooklm" | "prompt_paste" | "manual" | "generate" | "pdf" | "banned">("notebooklm");
 
@@ -206,9 +224,9 @@ export function AIQuestionBankStudio({
       url: "https://notebook.google.com/notebook/176db6d9-b9b8-47e9-a65b-b65499e63db9",
       active: true,
     },
-    bucet: {
-      name: "BUCET Reviewer Notebook",
-      url: "https://notebook.google.com/notebook/176db6d9-b9b8-47e9-a65b-b65499e63db9",
+    ateneo: {
+      name: "ACET Reviewer Notebook",
+      url: "https://notebook.google.com/notebook/2c189a47-3cc8-4bc5-8ecd-ac338dcdfbc4",
       active: true,
     },
     acet: {
@@ -216,7 +234,22 @@ export function AIQuestionBankStudio({
       url: "https://notebook.google.com/notebook/2c189a47-3cc8-4bc5-8ecd-ac338dcdfbc4",
       active: true,
     },
+    bucet: {
+      name: "BUCET Reviewer Notebook",
+      url: "https://notebook.google.com/notebook/176db6d9-b9b8-47e9-a65b-b65499e63db9",
+      active: true,
+    },
+    bu: {
+      name: "BUCET Reviewer Notebook",
+      url: "https://notebook.google.com/notebook/176db6d9-b9b8-47e9-a65b-b65499e63db9",
+      active: true,
+    },
     ustet: {
+      name: "USTET Reviewer Notebook",
+      url: "https://notebook.google.com/",
+      active: false,
+    },
+    ust: {
       name: "USTET Reviewer Notebook",
       url: "https://notebook.google.com/",
       active: false,
@@ -226,10 +259,34 @@ export function AIQuestionBankStudio({
       url: "https://notebook.google.com/",
       active: false,
     },
+    dcat: {
+      name: "DLSU DCAT Reviewer Notebook",
+      url: "https://notebook.google.com/",
+      active: false,
+    },
   };
 
   const [promptSubTab, setPromptSubTab] = useState<"notebooklm" | "generate_prompt">("notebooklm");
   const [notebookSubject, setNotebookSubject] = useState<string>(availableSubjects[0]?.id || "math");
+
+  // Get test name and user-configured / default item counts for this university
+  const examName = React.useMemo(() => {
+    return TRACKED_UNIVERSITIES.find((u) => u.id === universityId.toLowerCase())?.shortName || universityId.toUpperCase();
+  }, [universityId]);
+
+  const savedLocalCounts = React.useMemo(() => {
+    try {
+      const raw = localStorage.getItem(`kolehiyotrack_test_item_counts_${universityId.toLowerCase()}`);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }, [universityId]);
+
+  const defaultTestCount = React.useMemo(() => {
+    return testItemCounts?.[notebookSubject] ?? savedLocalCounts?.[notebookSubject] ?? getDefaultItemCounts(universityId)[notebookSubject] ?? 10;
+  }, [testItemCounts, savedLocalCounts, universityId, notebookSubject]);
+
   const [notebookCount, setNotebookCount] = useState<number>(3);
   const [notebookCopied, setNotebookCopied] = useState<boolean>(false);
   const [commandCopied, setCommandCopied] = useState<boolean>(false);
@@ -269,6 +326,9 @@ export function AIQuestionBankStudio({
       setGenItemCounts(getDefaultItemCounts(universityId));
     }
   }, [universityId]);
+
+  const [bannedSubTab, setBannedSubTab] = useState<"quizzed" | "manual">("quizzed");
+  const [bannedSearch, setBannedSearch] = useState<string>("");
 
   if (!open) return null;
 
@@ -686,7 +746,7 @@ Rules:
     setNotebookCopied(true);
     setTimeout(() => setNotebookCopied(false), 3000);
 
-    const targetConfig = NOTEBOOK_URLS[universityId] || NOTEBOOK_URLS.upcat;
+    const targetConfig = NOTEBOOK_URLS[universityId.toLowerCase()] || NOTEBOOK_URLS.upcat;
     window.open(targetConfig.url, "_blank", "noopener,noreferrer");
   };
 
@@ -1004,7 +1064,7 @@ Rules:
                 {(() => {
                   const currentCmd = getNotebookShorthandCommand(universityId, notebookSubject, notebookCount);
                   const uniUpper = universityId.toUpperCase();
-                  const targetConfig = NOTEBOOK_URLS[universityId] || NOTEBOOK_URLS.upcat;
+                  const targetConfig = NOTEBOOK_URLS[universityId.toLowerCase()] || NOTEBOOK_URLS.upcat;
 
                   return (
                     <div className="p-4 rounded-xl border bg-card/60 space-y-3.5 shadow-xs">
@@ -1102,8 +1162,25 @@ Rules:
 
                       {/* Quantity Shortcut Chips */}
                       <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-semibold text-muted-foreground">Number of questions:</span>
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[11px] font-semibold text-muted-foreground">Number of questions:</span>
+                            <button
+                              type="button"
+                              id="btn-quick-default-count"
+                              onClick={() => setNotebookCount(defaultTestCount)}
+                              className={cn(
+                                "inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-semibold rounded-md border transition-all cursor-pointer",
+                                notebookCount === defaultTestCount
+                                  ? "bg-primary text-primary-foreground border-primary shadow-xs font-bold"
+                                  : "bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 hover:border-primary/50"
+                              )}
+                              title={`Set to ${examName} test configuration (${defaultTestCount} items)`}
+                            >
+                              <Sparkles className="h-3 w-3" />
+                              <span>{examName} Default ({defaultTestCount} items)</span>
+                            </button>
+                          </div>
                           <div className="flex items-center gap-1.5">
                             <DirectNumberInput
                               value={notebookCount}
@@ -1114,22 +1191,42 @@ Rules:
                             <span className="text-[11px] text-muted-foreground">items</span>
                           </div>
                         </div>
-                        <div className="flex flex-wrap gap-1.5">
-                          {[3, 5, 10, 15, 20, 25, 30, 50].map((count) => (
-                            <button
-                              key={count}
-                              type="button"
-                              onClick={() => setNotebookCount(count)}
-                              className={cn(
-                                "px-2.5 py-1 text-xs font-semibold rounded-md border transition-all cursor-pointer",
-                                notebookCount === count
-                                  ? "bg-secondary text-secondary-foreground border-secondary-foreground/30 font-bold"
-                                  : "bg-background text-muted-foreground border-border hover:text-foreground"
-                              )}
-                            >
-                              {count} items
-                            </button>
-                          ))}
+                        <div className="flex flex-wrap gap-1.5 items-center">
+                          {/* Dedicated Default Button */}
+                          <button
+                            type="button"
+                            id="btn-default-test-count"
+                            onClick={() => setNotebookCount(defaultTestCount)}
+                            className={cn(
+                              "px-2.5 py-1 text-xs font-semibold rounded-md border transition-all cursor-pointer flex items-center gap-1.5",
+                              notebookCount === defaultTestCount
+                                ? "bg-primary text-primary-foreground border-primary shadow-xs font-bold ring-1 ring-primary/40"
+                                : "bg-primary/10 text-primary border-primary/30 hover:bg-primary/20 hover:border-primary/50 font-medium"
+                            )}
+                            title={`Set to ${examName} test items (${defaultTestCount} items)`}
+                          >
+                            <Sparkles className="h-3 w-3" />
+                            <span>{examName} Default ({defaultTestCount} items)</span>
+                          </button>
+
+                          {[3, 5, 10, 15, 20, 25, 30, 50, ...(defaultTestCount > 50 ? [defaultTestCount] : [])]
+                            .filter((count, index, self) => self.indexOf(count) === index && count !== defaultTestCount)
+                            .sort((a, b) => a - b)
+                            .map((count) => (
+                              <button
+                                key={count}
+                                type="button"
+                                onClick={() => setNotebookCount(count)}
+                                className={cn(
+                                  "px-2.5 py-1 text-xs font-semibold rounded-md border transition-all cursor-pointer",
+                                  notebookCount === count
+                                    ? "bg-secondary text-secondary-foreground border-secondary-foreground/30 font-bold"
+                                    : "bg-background text-muted-foreground border-border hover:text-foreground"
+                                )}
+                              >
+                                {count} items
+                              </button>
+                            ))}
                         </div>
                       </div>
 
@@ -1255,6 +1352,20 @@ Rules:
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-[11px] px-2.5 rounded-lg cursor-pointer gap-1"
+                    onClick={() => {
+                      const countsToUse = testItemCounts || savedLocalCounts || getDefaultItemCounts(universityId);
+                      setGenItemCounts({ ...countsToUse });
+                    }}
+                    title={`Reset question counts to ${examName} test settings`}
+                  >
+                    <Sparkles className="h-3 w-3 text-primary" />
+                    <span>{examName} Defaults</span>
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -2200,78 +2311,304 @@ Rules:
         )}
 
         {/* ═════════════════════════════════════════════════════════════════════════ */}
-        {/* ─── TAB 5: BANNED QUESTIONS LIST ─── */}
+        {/* ─── TAB 5: BANNED / BLOCKED QUESTIONS LIST & RESET ─── */}
         {/* ═════════════════════════════════════════════════════════════════════════ */}
         {activeTab === "banned" && (() => {
-          const bannedQs = getBannedQuestions(universityId);
+          const quizzedQs = getQuizzedRepeatBannedQuestions(universityId);
+          const manualQs = getBannedQuestions(universityId);
+          const totalBlocked = quizzedQs.length + manualQs.length;
+
+          // Filter by search query
+          const filteredQuizzed = quizzedQs.filter((q) => {
+            if (!bannedSearch.trim()) return true;
+            const searchLower = bannedSearch.toLowerCase();
+            return (
+              (q.text && q.text.toLowerCase().includes(searchLower)) ||
+              (q.subject && q.subject.toLowerCase().includes(searchLower)) ||
+              (q.topic && q.topic.toLowerCase().includes(searchLower))
+            );
+          });
+
+          const filteredManual = manualQs.filter((q) => {
+            if (!bannedSearch.trim()) return true;
+            const searchLower = bannedSearch.toLowerCase();
+            return (
+              (q.text && q.text.toLowerCase().includes(searchLower)) ||
+              (q.subject && q.subject.toLowerCase().includes(searchLower)) ||
+              (q.topic && q.topic.toLowerCase().includes(searchLower))
+            );
+          });
+
           return (
             <div className="space-y-4">
-              <div className="p-3.5 rounded-xl bg-destructive/5 border border-destructive/15 text-xs text-muted-foreground flex items-center justify-between gap-3">
+              <div className="p-3.5 rounded-xl bg-destructive/5 border border-destructive/15 text-xs text-muted-foreground flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <span className="text-sm">🚫</span>
-                  <span>
-                    Banned questions list. Once banned, a question (and any similar questions in the bank) will never be chosen for your mock exams.
-                  </span>
+                  <div>
+                    <span className="font-semibold text-foreground block">Repeat Ban & Past Quiz Memory</span>
+                    <span className="text-[11px]">
+                      Questions quizzed in past sessions are blocked from repeating in future quizzes. Unban questions here or reset session history for {universityId.toUpperCase()}.
+                    </span>
+                  </div>
                 </div>
-                <Badge variant="outline" className="text-[10px] font-bold text-destructive border-destructive/30">
-                  {bannedQs.length} Banned Item{bannedQs.length !== 1 ? "s" : ""}
-                </Badge>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="outline" className="text-[10px] font-bold text-destructive border-destructive/30">
+                    {totalBlocked} Banned / Quizzed Item{totalBlocked !== 1 ? "s" : ""}
+                  </Badge>
+                  {totalBlocked > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        unbanAllQuestions(universityId);
+                        onQuestionsAdded();
+                        setSuccessMessage("All questions have been unbanned! They can now appear in future quizzes.");
+                        setTimeout(() => setSuccessMessage(null), 4000);
+                      }}
+                      className="h-7 text-xs font-semibold px-2.5 gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10 cursor-pointer"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      <span>Unban All ({totalBlocked})</span>
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      clearPastQuizHistory(universityId);
+                      onQuestionsAdded();
+                      setSuccessMessage("Past session history reset! All questions can now appear in new quizzes.");
+                      setTimeout(() => setSuccessMessage(null), 4000);
+                    }}
+                    className="h-7 text-xs font-semibold px-2.5 gap-1.5 text-foreground hover:bg-muted cursor-pointer"
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    <span>Reset Past Sessions</span>
+                  </Button>
+                </div>
               </div>
 
-              {bannedQs.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground bg-muted/10 rounded-xl border border-dashed">
-                  <span className="text-3xl block mb-2">🎈</span>
-                  <p className="text-xs">No banned questions yet!</p>
-                  <p className="text-[11px] text-muted-foreground/80 mt-1">You can ban problematic questions directly from the practice test review screen.</p>
+              {/* Subtabs and Search Bar */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex items-center gap-1.5 bg-muted/30 p-1 rounded-lg border w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setBannedSubTab("quizzed")}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
+                      bannedSubTab === "quizzed"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span>Quizzed in Past Sessions</span>
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">
+                      {quizzedQs.length}
+                    </Badge>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setBannedSubTab("manual")}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer flex items-center gap-1.5",
+                      bannedSubTab === "manual"
+                        ? "bg-background text-foreground shadow-xs font-semibold"
+                        : "text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <span>Manually Blocked</span>
+                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4">
+                      {manualQs.length}
+                    </Badge>
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
-                  {bannedQs.map((q, idx) => (
-                    <div key={q.id} className="p-4 rounded-xl border bg-card text-xs space-y-3 shadow-sm">
-                      <div className="flex items-center justify-between border-b pb-2">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="text-[10px] font-bold">
-                            {SUBJECT_LABELS[q.subject] || q.subject}
-                          </Badge>
-                          {q.topic && (
-                            <span className="text-muted-foreground text-[10px]">· {q.topic}</span>
-                          )}
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            unbanQuestion(q.id, universityId);
-                            onQuestionsAdded();
-                          }}
-                          className="h-6 text-[10px] px-2 text-red-600 dark:text-red-400 font-semibold hover:bg-red-500/10 cursor-pointer rounded-md bg-transparent border-0"
-                        >
-                          Restore Question
-                        </Button>
-                      </div>
-                      <SmartText text={q.text} className="text-xs text-foreground font-medium" />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-muted-foreground pt-1">
-                        {q.choices.map((c) => (
-                          <div
-                            key={c.id}
-                            className={cn(
-                              "p-2 rounded-lg border text-xs",
-                              c.id === q.correctAnswer
-                                ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold"
-                                : "bg-muted/30"
-                            )}
-                          >
-                            <span className="font-bold mr-1.5">{c.id}.</span> {c.text}
-                          </div>
-                        ))}
-                      </div>
-                      {q.explanation && (
-                        <p className="text-[11px] text-muted-foreground italic pt-1.5 border-t">
-                          💡 <strong>Solution:</strong> {q.explanation}
+
+                <div className="relative max-w-xs w-full">
+                  <Input
+                    type="text"
+                    placeholder="Search blocked questions..."
+                    value={bannedSearch}
+                    onChange={(e) => setBannedSearch(e.target.value)}
+                    className="h-8 text-xs bg-background"
+                  />
+                  {bannedSearch && (
+                    <button
+                      onClick={() => setBannedSearch("")}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Content by SubTab */}
+              {bannedSubTab === "quizzed" && (
+                <div>
+                  {filteredQuizzed.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground bg-muted/10 rounded-xl border border-dashed space-y-3">
+                      <span className="text-3xl block">🎈</span>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">
+                          {quizzedQs.length === 0
+                            ? "No repeat questions are currently banned from past sessions!"
+                            : "No quizzed questions matched your search."}
                         </p>
+                        <p className="text-[11px] text-muted-foreground/80 mt-1 max-w-md mx-auto">
+                          When you complete quizzes and mock exams, tested questions are automatically tracked to prevent repetition.
+                        </p>
+                      </div>
+                      {quizzedQs.length > 0 && (
+                        <div className="pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              clearPastQuizHistory(universityId);
+                              onQuestionsAdded();
+                              setSuccessMessage("Past session question history reset!");
+                              setTimeout(() => setSuccessMessage(null), 4000);
+                            }}
+                            className="h-7 text-xs font-semibold px-3 gap-1.5 cursor-pointer"
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            <span>Reset Past Sessions History</span>
+                          </Button>
+                        </div>
                       )}
                     </div>
-                  ))}
+                  ) : (
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                      {filteredQuizzed.map((q, idx) => (
+                        <div key={q.id || idx} className="p-4 rounded-xl border bg-card text-xs space-y-3 shadow-sm">
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-[10px] font-bold">
+                                {SUBJECT_LABELS[q.subject || ""] || q.subject || "General"}
+                              </Badge>
+                              {q.topic && (
+                                <span className="text-muted-foreground text-[10px]">· {q.topic}</span>
+                              )}
+                              <span className="text-[10px] text-muted-foreground/60 hidden sm:inline">
+                                (Quizzed)
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                removePastQuizQuestion(q.id || q.text, universityId);
+                                onQuestionsAdded();
+                                setSuccessMessage("✓ Question unbanned! It can appear again in future quizzes.");
+                                setTimeout(() => setSuccessMessage(null), 3000);
+                              }}
+                              className="h-6 text-[10px] px-2 text-emerald-600 dark:text-emerald-400 font-semibold hover:bg-emerald-500/10 cursor-pointer rounded-md bg-transparent border-0"
+                            >
+                              <RotateCcw className="h-3 w-3 mr-1" />
+                              Unban / Allow in Quiz
+                            </Button>
+                          </div>
+                          <SmartText text={q.text} className="text-xs text-foreground font-medium" />
+                          {q.choices && q.choices.length > 0 && (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-muted-foreground pt-1">
+                              {q.choices.map((c) => (
+                                <div
+                                  key={c.id}
+                                  className={cn(
+                                    "p-2 rounded-lg border text-xs",
+                                    c.id === q.correctAnswer
+                                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold"
+                                      : "bg-muted/30"
+                                  )}
+                                >
+                                  <span className="font-bold mr-1.5">{c.id}.</span> {c.text}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {q.explanation && (
+                            <p className="text-[11px] text-muted-foreground italic pt-1.5 border-t">
+                              💡 <strong>Solution:</strong> {q.explanation}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {bannedSubTab === "manual" && (
+                <div>
+                  {filteredManual.length === 0 ? (
+                    <div className="text-center py-10 text-muted-foreground bg-muted/10 rounded-xl border border-dashed space-y-3">
+                      <span className="text-3xl block">🎈</span>
+                      <div>
+                        <p className="text-xs font-semibold text-foreground">
+                          {manualQs.length === 0
+                            ? "No questions are manually blocked!"
+                            : "No manually blocked questions matched your search."}
+                        </p>
+                        <p className="text-[11px] text-muted-foreground/80 mt-1 max-w-md mx-auto">
+                          All questions in your question bank are eligible to appear in quizzes.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                      {filteredManual.map((q) => (
+                        <div key={q.id} className="p-4 rounded-xl border bg-card text-xs space-y-3 shadow-sm">
+                          <div className="flex items-center justify-between border-b pb-2">
+                            <div className="flex items-center gap-2">
+                              <Badge variant="secondary" className="text-[10px] font-bold">
+                                {SUBJECT_LABELS[q.subject] || q.subject}
+                              </Badge>
+                              {q.topic && (
+                                <span className="text-muted-foreground text-[10px]">· {q.topic}</span>
+                              )}
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                unbanQuestion(q.id, universityId);
+                                onQuestionsAdded();
+                                setSuccessMessage("✓ Manually blocked question restored!");
+                                setTimeout(() => setSuccessMessage(null), 3000);
+                              }}
+                              className="h-6 text-[10px] px-2 text-red-600 dark:text-red-400 font-semibold hover:bg-red-500/10 cursor-pointer rounded-md bg-transparent border-0"
+                            >
+                              Restore Question
+                            </Button>
+                          </div>
+                          <SmartText text={q.text} className="text-xs text-foreground font-medium" />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-muted-foreground pt-1">
+                            {q.choices.map((c) => (
+                              <div
+                                key={c.id}
+                                className={cn(
+                                  "p-2 rounded-lg border text-xs",
+                                  c.id === q.correctAnswer
+                                    ? "border-emerald-500 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-semibold"
+                                    : "bg-muted/30"
+                                )}
+                              >
+                                <span className="font-bold mr-1.5">{c.id}.</span> {c.text}
+                              </div>
+                            ))}
+                          </div>
+                          {q.explanation && (
+                            <p className="text-[11px] text-muted-foreground italic pt-1.5 border-t">
+                              💡 <strong>Solution:</strong> {q.explanation}
+                            </p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

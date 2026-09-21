@@ -13,14 +13,14 @@ export interface BankQuestion {
   diagram?: import("@/types/diagram").DiagramSpec;
 }
 
-import { banQuestionStore, unbanQuestionStore, getLocalBannedStore, isQuestionBannedStore } from "./banned-questions-store";
+import { banQuestionStore, unbanQuestionStore, getLocalBannedStore, isQuestionBannedStore, clearBannedStore } from "./banned-questions-store";
 
 export function normalizeUniversityId(rawUni?: string): string {
   if (!rawUni) return "upcat";
   const u = rawUni.toLowerCase().trim();
-  if (u.includes("acet") || u.includes("ateneo") || u.includes("admu")) return "acet";
-  if (u.includes("bucet") || u.includes("bicol") || u === "bu") return "bucet";
-  if (u.includes("ustet") || u.includes("ust") || u.includes("tomas")) return "ustet";
+  if (u.includes("acet") || u.includes("ateneo") || u.includes("admu")) return "ateneo";
+  if (u.includes("bucet") || u.includes("bicol") || u === "bu") return "bu";
+  if (u.includes("ustet") || u.includes("ust") || u.includes("tomas")) return "ust";
   if (u.includes("dcat") || u.includes("dlsu") || u.includes("salle") || u.includes("lasalle")) return "dlsu";
   if (u.includes("upcat") || u.includes("up") || u.includes("diliman")) return "upcat";
   return u;
@@ -48,73 +48,132 @@ export function normalizeBankSubject(subject: string, text?: string): string {
     return s;
   }
 
-  if (s.includes("filipino") || s.includes("tagalog") || s.includes("balarila") || s.includes("panitikan")) {
-    if (s.includes("reading") || s.includes("basa") || s.includes("comprehension") || t.includes("talata") || t.includes("kwento")) {
+  // Filipino language & reading
+  if (s.includes("filipino") || s.includes("tagalog") || s.includes("balarila") || s.includes("panitikan") || s.includes("wika")) {
+    if (s.includes("reading") || s.includes("basa") || s.includes("comprehension") || t.includes("talata") || t.includes("kwento") || t.includes("ayon sa teksto")) {
       return "reading_filipino";
     }
     return "language_filipino";
   }
 
-  if (s.includes("reading") || s.includes("comprehension") || s.includes("passage") || t.includes("passage:") || t.includes("according to the passage")) {
+  // Reading comprehension (English)
+  if (s.includes("reading") || s.includes("comprehension") || s.includes("passage") || t.startsWith("passage:") || t.includes("\npassage:") || t.includes("according to the passage") || t.includes("the author's tone")) {
     return "reading_english";
   }
 
+  // Abstract / Spatial reasoning
   if (s.includes("abstract") || s.includes("spatial") || s.includes("mental") || s.includes("figure") || s.includes("pattern") || s.includes("matrix")) {
     return "abstract_reasoning";
   }
 
-  if (s.includes("logical") || s.includes("logic") || s.includes("syllogism") || s.includes("deductive")) {
+  // Logical reasoning
+  if (s.includes("logical") || s.includes("logic") || s.includes("syllogism") || s.includes("deductive") || s.includes("fallacy") || s.includes("premise")) {
     return "logical_reasoning";
   }
 
+  // Numerical ability
   if (s.includes("numerical") || s.includes("number series") || s.includes("quantitative")) {
     return "numerical_ability";
   }
 
+  // Statistics & research
   if (s.includes("stat") || s.includes("research") || s.includes("business math") || s.includes("interest")) {
     return "statistics_research";
   }
 
+  // General information & analogies
   if (s.includes("general info") || s.includes("gen info") || s.includes("analogy") || s.includes("analogies") || s.includes("civic") || s.includes("literature") || s.includes("history")) {
     return "general_info";
   }
 
+  // Mathematics
   if (s.includes("math") || s.includes("algebra") || s.includes("geom") || s.includes("trig") || s.includes("calc") || s.includes("arith")) {
     return "math";
   }
 
+  // Science
   if (s.includes("sci") || s.includes("bio") || s.includes("chem") || s.includes("phys") || s.includes("earth") || s.includes("geol") || s.includes("astro") || s.includes("eco")) {
     return "science";
   }
 
-  if (s.includes("eng") || s.includes("lang") || s.includes("gram") || s.includes("vocab") || s.includes("profic") || s.includes("verbal") || s.includes("eapp")) {
+  // English / Language proficiency / Grammar / Vocabulary
+  if (s.includes("eng") || s.includes("lang") || s.includes("gram") || s.includes("vocab") || s.includes("profic") || s.includes("verbal") || s.includes("eapp") || s.includes("correct") || s.includes("sentence") || s.includes("error")) {
     return "language_english";
   }
 
   // Quick fallback check by question content
-  if (/\b(alin|ano|sino|saan|kailan|bakit|paano|sumusunod|piliin|salita|pangungusap|talata)\b/i.test(t)) {
+  if (/\b(alin|ano|sino|saan|kailan|bakit|paano|sumusunod|piliin|salita|pangungusap|talata|wastong|bantas|panlapi)\b/i.test(t)) {
     return "language_filipino";
   }
-  if (/(\$|\\frac|\\sqrt|\^2|f\(x\)|polynomial|triangle|slope|equation|algebra|geometry)/i.test(t)) {
+  if (/(\$|\\frac|\\sqrt|\^2|f\(x\)|polynomial|triangle|slope|equation|algebra|geometry|hypotenuse|perimeter|area of|matrix)/i.test(t)) {
     return "math";
   }
-  if (/(cell|mitosis|dna|velocity|gravity|atom|electron|tectonic|plate|trench|earthquake|stoichiometry|molarity|circuit)/i.test(t)) {
+  if (/(cell|mitosis|meiosis|dna|velocity|gravity|atom|electron|tectonic|plate|trench|earthquake|stoichiometry|molarity|circuit|voltage|photosynthesis|newton)/i.test(t)) {
     return "science";
   }
+  if (/(____|no error|underlined|subject-verb|verb|tense|preposition|pronoun|synonym|antonym|which of the following sentences|grammatically correct|choose the correct|meaning of)/i.test(t)) {
+    return "language_english";
+  }
 
-  return "science";
+  return "language_english";
 }
 
-const getBankKey = (uniId: string) => `kolehiyotrack_bank_${uniId}`;
-const getUsedKey = (uniId: string) => `kolehiyotrack_used_${uniId}`;
+const getBankKey = (uniId: string) => `kolehiyotrack_bank_${normalizeUniversityId(uniId)}`;
+const getUsedKey = (uniId: string) => `kolehiyotrack_used_${normalizeUniversityId(uniId)}`;
 
 export function getBankQuestions(uniId: string): BankQuestion[] {
+  const normId = normalizeUniversityId(uniId);
   try {
-    const raw = localStorage.getItem(getBankKey(uniId));
+    let raw = localStorage.getItem(getBankKey(normId));
+
+    // Also check alias keys and migrate if needed
+    const aliases: Record<string, string[]> = {
+      ateneo: ["acet", "admu"],
+      dlsu: ["dcat"],
+      ust: ["ustet"],
+      bu: ["bucet"],
+      upcat: ["up"],
+    };
+
+    const possibleKeys = [
+      getBankKey(normId),
+      ...(aliases[normId] || []).map((a) => `kolehiyotrack_bank_${a}`),
+    ];
+    const combinedQuestions: BankQuestion[] = [];
+    const seenIds = new Set<string>();
+
+    for (const k of possibleKeys) {
+      const itemRaw = localStorage.getItem(k);
+      if (itemRaw) {
+        try {
+          const parsed = JSON.parse(itemRaw) as BankQuestion[];
+          for (const q of parsed) {
+            if (q && q.id && !seenIds.has(q.id)) {
+              seenIds.add(q.id);
+              combinedQuestions.push({
+                ...q,
+                university: normId,
+                subject: normalizeBankSubject(q.subject, q.text),
+              });
+            }
+          }
+        } catch {}
+      }
+    }
+
+    // If combined questions were found across keys, ensure the canonical key is saved
+    if (combinedQuestions.length > 0) {
+      if (!raw || JSON.parse(raw).length < combinedQuestions.length) {
+        localStorage.setItem(getBankKey(normId), JSON.stringify(combinedQuestions));
+      }
+      return combinedQuestions;
+    }
+
     if (!raw) return [];
     const questions = JSON.parse(raw) as BankQuestion[];
     return questions.map((q) => ({
       ...q,
+      university: normId,
       subject: normalizeBankSubject(q.subject, q.text),
     }));
   } catch {
@@ -122,8 +181,17 @@ export function getBankQuestions(uniId: string): BankQuestion[] {
   }
 }
 
-export function getBankUpdatedAt(uniId: string): number { return parseInt(localStorage.getItem(`kolehiyotrack_bank_updated_${uniId}`) || "0", 10) || 0; } 
-export function setBankUpdatedAt(uniId: string, timestamp: number): void { localStorage.setItem(`kolehiyotrack_bank_updated_${uniId}`, timestamp.toString()); }
+export function getBankUpdatedAt(uniId: string): number {
+  const normId = normalizeUniversityId(uniId);
+  return parseInt(localStorage.getItem(`kolehiyotrack_bank_updated_${normId}`) || "0", 10) || 0;
+}
+export function setBankUpdatedAt(uniId: string, timestamp: number): void {
+  const normId = normalizeUniversityId(uniId);
+  localStorage.setItem(`kolehiyotrack_bank_updated_${normId}`, timestamp.toString());
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("question_bank_updated"));
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NORMALIZATION & SIMILARITY COMPARISON
@@ -216,22 +284,28 @@ export function isDuplicateQuestion(
 // (A question is ONLY considered repeated if it has appeared in a previous quiz/past session)
 // ─────────────────────────────────────────────────────────────────────────────
 
-const getPastQuizKey = (uniId: string) => `kolehiyotrack_past_quiz_q_${uniId}`;
-const getLocalSessionsKey = (uniId: string) => `kolehiyotrack_sessions_${uniId}`;
+const getPastQuizKey = (uniId: string) => `kolehiyotrack_past_quiz_q_${normalizeUniversityId(uniId)}`;
+const getLocalSessionsKey = (uniId: string) => `kolehiyotrack_sessions_${normalizeUniversityId(uniId)}`;
 
 export interface PastQuizQuestion {
   id: string;
   text: string;
   subject?: string;
+  topic?: string;
+  choices?: { id: string; text: string }[];
+  correctAnswer?: string;
+  explanation?: string;
+  diagram?: any;
   timestamp: number;
 }
 
 export function getPastQuizQuestions(uniId: string): PastQuizQuestion[] {
   try {
-    const raw = localStorage.getItem(getPastQuizKey(uniId));
+    const normUni = normalizeUniversityId(uniId);
+    const raw = localStorage.getItem(getPastQuizKey(normUni));
     if (raw) return JSON.parse(raw) as PastQuizQuestion[];
     // Fallback to legacy key if exists
-    const legacy = localStorage.getItem(`kolehiyotrack_history_q_${uniId}`);
+    const legacy = localStorage.getItem(`kolehiyotrack_history_q_${normUni}`);
     if (legacy) return JSON.parse(legacy) as PastQuizQuestion[];
     return [];
   } catch {
@@ -240,13 +314,24 @@ export function getPastQuizQuestions(uniId: string): PastQuizQuestion[] {
 }
 
 export function recordPastQuizQuestions(
-  questions: { id?: string; text: string; subject?: string }[],
+  questions: {
+    id?: string;
+    text: string;
+    subject?: string;
+    topic?: string;
+    choices?: { id: string; text: string }[];
+    correctAnswer?: string;
+    explanation?: string;
+    diagram?: any;
+  }[],
   uniId: string
 ): void {
   try {
     if (!questions || questions.length === 0) return;
-    const existing = getPastQuizQuestions(uniId);
+    const normUni = normalizeUniversityId(uniId);
+    const existing = getPastQuizQuestions(normUni);
     const existingNorms = new Set(existing.map((e) => normalizeQuestionText(e.text)));
+    const existingIds = new Set(existing.map((e) => e.id));
     const now = Date.now();
     let updated = false;
 
@@ -254,12 +339,18 @@ export function recordPastQuizQuestions(
       if (!q.text) continue;
       const norm = normalizeQuestionText(q.text);
       if (!norm) continue;
-      if (!existingNorms.has(norm)) {
+      if (!existingNorms.has(norm) && (!q.id || !existingIds.has(q.id))) {
         existingNorms.add(norm);
+        if (q.id) existingIds.add(q.id);
         existing.push({
           id: q.id || `past_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
           text: q.text,
           subject: q.subject,
+          topic: q.topic,
+          choices: q.choices,
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation,
+          diagram: q.diagram,
           timestamp: now,
         });
         updated = true;
@@ -269,10 +360,31 @@ export function recordPastQuizQuestions(
     if (updated) {
       // Keep up to 3000 questions from past quizzes per university
       const capped = existing.slice(-3000);
-      localStorage.setItem(getPastQuizKey(uniId), JSON.stringify(capped));
+      localStorage.setItem(getPastQuizKey(normUni), JSON.stringify(capped));
+      setBankUpdatedAt(normUni, Date.now());
     }
   } catch (err) {
     console.error("Failed to record past quiz questions:", err);
+  }
+}
+
+export function removePastQuizQuestion(idOrText: string, uniId: string): void {
+  try {
+    const normUni = normalizeUniversityId(uniId);
+    const existing = getPastQuizQuestions(normUni);
+    const filtered = existing.filter((p) => {
+      if (p.id === idOrText) return false;
+      const norm1 = normalizeQuestionText(p.text);
+      const norm2 = normalizeQuestionText(idOrText);
+      if (norm1 && norm2 && (norm1 === norm2 || calculateSimilarity(p.text, idOrText) >= 0.90)) {
+        return false;
+      }
+      return true;
+    });
+    localStorage.setItem(getPastQuizKey(normUni), JSON.stringify(filtered));
+    setBankUpdatedAt(normUni, Date.now());
+  } catch (err) {
+    console.error("Failed to remove past quiz question:", err);
   }
 }
 
@@ -280,7 +392,8 @@ export function isQuestionInPastQuizzes(
   q: { id?: string; text: string },
   uniId: string
 ): boolean {
-  const pastList = getPastQuizQuestions(uniId);
+  const normUni = normalizeUniversityId(uniId);
+  const pastList = getPastQuizQuestions(normUni);
   for (const past of pastList) {
     if (isDuplicateQuestion(q, past)) {
       return true;
@@ -289,9 +402,29 @@ export function isQuestionInPastQuizzes(
   return false;
 }
 
+export function getQuizzedRepeatBannedQuestions(uniId: string): PastQuizQuestion[] {
+  const normUni = normalizeUniversityId(uniId);
+  const pastList = getPastQuizQuestions(normUni);
+  const bank = getBankQuestions(normUni);
+
+  return pastList.map((p) => {
+    const match = bank.find((b) => isDuplicateQuestion(b, p));
+    return {
+      ...p,
+      choices: p.choices && p.choices.length > 0 ? p.choices : match?.choices,
+      correctAnswer: p.correctAnswer || match?.correctAnswer,
+      explanation: p.explanation || match?.explanation,
+      subject: p.subject || match?.subject || "general",
+      topic: p.topic || match?.topic,
+    };
+  });
+}
+
 export function clearPastQuizQuestions(uniId: string): void {
-  localStorage.removeItem(getPastQuizKey(uniId));
-  localStorage.removeItem(`kolehiyotrack_history_q_${uniId}`);
+  const normUni = normalizeUniversityId(uniId);
+  localStorage.removeItem(getPastQuizKey(normUni));
+  localStorage.removeItem(`kolehiyotrack_history_q_${normUni}`);
+  setBankUpdatedAt(normUni, Date.now());
 }
 
 // Backward compatibility aliases
@@ -333,89 +466,49 @@ export function saveBankQuestions(questions: BankQuestion[], uniId: string, skip
 }
 
 export function addBankQuestions(incoming: BankQuestion[], uniId: string): { added: number; skipped: number } {
-  // Group questions by target university if questions have an explicit university field
-  // Otherwise default to the active uniId.
-  const fallbackNormalized = normalizeUniversityId(uniId);
-  const byUni = new Map<string, BankQuestion[]>();
+  // Save to the active university context unless explicit
+  const targetUni = normalizeUniversityId(uniId || "upcat");
+  const existing = getBankQuestions(targetUni);
+  const existingMap = new Map(existing.map((q) => [q.id, q]));
 
-  for (const q of incoming) {
-    const targetUni = normalizeUniversityId(q.university || fallbackNormalized);
-    if (!byUni.has(targetUni)) {
-      byUni.set(targetUni, []);
+  const normalizedIncoming = incoming.map((q) => ({
+    ...q,
+    university: targetUni,
+    subject: normalizeBankSubject(q.subject, q.text),
+  }));
+
+  const toAdd: BankQuestion[] = [];
+  const seenBatchTexts = new Set<string>();
+  const seenBatchIds = new Set<string>();
+  let skipped = 0;
+
+  for (let i = 0; i < normalizedIncoming.length; i++) {
+    const q = normalizedIncoming[i];
+    const normText = normalizeQuestionText(q.text);
+
+    // Prevent duplicate entries inside the exact same pasted batch
+    if (normText && seenBatchTexts.has(normText)) {
+      skipped++;
+      continue;
     }
-    byUni.get(targetUni)!.push(q);
-  }
+    if (q.id && seenBatchIds.has(q.id)) {
+      q.id = `${q.id}_${i}`;
+    }
 
-  let totalAdded = 0;
-  let totalSkipped = 0;
+    if (normText) seenBatchTexts.add(normText);
+    if (q.id) seenBatchIds.add(q.id);
 
-  for (const [targetUni, questions] of byUni.entries()) {
-    const existing = getBankQuestions(targetUni);
-    const existingMap = new Map(existing.map((q) => [q.id, q]));
-    const normalizedIncoming = questions.map((q) => ({
-      ...q,
-      subject: normalizeBankSubject(q.subject, q.text),
-    }));
-
-    const toAdd: BankQuestion[] = [];
-    let skipped = 0;
-    const allowRepeated = localStorage.getItem("kt-allow-repeated") === "true";
-
-    for (let i = 0; i < normalizedIncoming.length; i++) {
-      const q = normalizedIncoming[i];
-      let isDuplicate = false;
-
-      if (!allowRepeated) {
-        // 1. Check if the question has already appeared in a previous quiz or past session!
-        if (isQuestionInPastQuizzes(q, targetUni)) {
-          isDuplicate = true;
-        }
-
-        // 2. Check against already existing questions currently in the active bank to prevent twin duplicates in the same bank
-        if (!isDuplicate) {
-          for (const ex of existing) {
-            if (isDuplicateQuestion(q, ex)) {
-              isDuplicate = true;
-              break;
-            }
-          }
-        }
-
-        // 3. Check against other items in the current incoming batch
-        if (!isDuplicate) {
-          for (const added of toAdd) {
-            if (isDuplicateQuestion(q, added)) {
-              isDuplicate = true;
-              break;
-            }
-          }
-        }
-      } else {
-        // If user allows repeated questions, ensure collision IDs get distinct keys
-        if (existingMap.has(q.id)) {
-          q.id = `${q.id}_${Date.now()}_${i}`;
-        }
-      }
-
-      if (isDuplicate) {
-        skipped++;
-        continue;
-      }
-
-      existingMap.set(q.id, q);
+    // If already exists in bank with identical ID or identical text, update/replace it
+    const existingIndex = existing.findIndex((ex) => ex.id === q.id || (normText && normalizeQuestionText(ex.text) === normText));
+    if (existingIndex >= 0) {
+      existing[existingIndex] = q;
+    } else {
       toAdd.push(q);
     }
-
-    if (toAdd.length > 0) {
-      saveBankQuestions([...existing, ...toAdd], targetUni);
-      // NOTE: We do NOT record questions into past quiz history here!
-      // A question is ONLY considered repeated once it has actually been taken in a quiz / past session.
-    }
-    totalAdded += toAdd.length;
-    totalSkipped += skipped;
   }
 
-  return { added: totalAdded, skipped: totalSkipped };
+  saveBankQuestions([...existing, ...toAdd], targetUni);
+  return { added: normalizedIncoming.length - skipped, skipped };
 }
 
 /**
@@ -736,9 +829,10 @@ export function parseRawQuestionBankText(
 }
 
 export function clearBank(uniId: string): void {
-  localStorage.removeItem(getBankKey(uniId));
-  localStorage.removeItem(getUsedKey(uniId));
-  setBankUpdatedAt(uniId, Date.now());
+  const normId = normalizeUniversityId(uniId);
+  localStorage.removeItem(getBankKey(normId));
+  localStorage.removeItem(getUsedKey(normId));
+  setBankUpdatedAt(normId, Date.now());
 }
 
 export function getUsedIds(uniId: string): Set<string> {
@@ -809,6 +903,33 @@ export function unbanQuestion(id: string, uniId: string, text?: string): void {
   setBankUpdatedAt(uniId, Date.now());
 }
 
+export function resetBannedQuestions(uniId: string): void {
+  clearBannedStore(uniId);
+  setBankUpdatedAt(uniId, Date.now());
+}
+
+export function unbanAllQuestions(uniId: string): void {
+  const normId = normalizeUniversityId(uniId);
+  resetBannedQuestions(normId);
+  clearPastQuizQuestions(normId);
+  resetUsedIds(normId);
+  setBankUpdatedAt(normId, Date.now());
+}
+
+export function clearPastQuizHistory(uniId: string): void {
+  try {
+    const normId = normalizeUniversityId(uniId);
+    localStorage.removeItem(getLocalSessionsKey(normId));
+    localStorage.removeItem(getPastQuizKey(normId));
+    localStorage.removeItem(`kolehiyotrack_history_q_${normId}`);
+    localStorage.removeItem(getUsedKey(normId));
+    resetBannedQuestions(normId);
+    setBankUpdatedAt(normId, Date.now());
+  } catch (err) {
+    console.error("Failed to clear past quiz history:", err);
+  }
+}
+
 export function getBannedQuestions(uniId: string): BankQuestion[] {
   const all = getBankQuestions(uniId);
   return all.filter((q) => isQuestionBannedStore(uniId, q.id, q.text));
@@ -820,27 +941,23 @@ export function pickQuestions(
   topics: string[],
   uniId: string
 ): BankQuestion[] {
-  const all = getBankQuestions(uniId);
-  const used = getUsedIds(uniId);
-  const bannedQuestions = all.filter((q) => isQuestionBannedStore(uniId, q.id, q.text));
+  const normId = normalizeUniversityId(uniId);
+  const all = getBankQuestions(normId);
+  const used = getUsedIds(normId);
 
   const filterFn = (q: BankQuestion) => {
     if (q.subject !== subject) return false;
     if (topics.length > 0 && q.topic && !topics.includes(q.topic)) return false;
     
-    // Exclude strictly banned questions (using both ID and content hash check)
-    if (isQuestionBannedStore(uniId, q.id, q.text)) return false;
-    
-    // Exclude similar questions to any banned question
-    if (bannedQuestions.some((bq) => calculateSimilarity(q.text, bq.text) > 0.65)) {
-      return false;
-    }
+    // Check manual ban store
+    if (isQuestionBannedStore(normId, q.id, q.text)) return false;
     return true;
   };
 
   const allowRepeated = typeof window !== "undefined" && localStorage.getItem("kt-allow-repeated") === "true";
   const candidates = all.filter(filterFn);
-  const unused = candidates.filter((q) => !used.has(q.id) && (allowRepeated || !isQuestionInPastQuizzes(q, uniId)));
+  // Repeat ban: only ban questions that have appeared in past sessions / quizzes or used in current rotation
+  const unused = candidates.filter((q) => !used.has(q.id) && (allowRepeated || !isQuestionInPastQuizzes(q, normId)));
   const pool = allowRepeated ? (unused.length >= count ? unused : candidates) : unused;
 
   // For reading comprehension, keep passages grouped together
@@ -887,29 +1004,26 @@ export function pickQuestions(
 }
 
 export function deleteBankQuestion(id: string, uniId: string): void {
-  const all = getBankQuestions(uniId);
+  const normId = normalizeUniversityId(uniId);
+  const all = getBankQuestions(normId);
   const q = all.find((item) => item.id === id);
   const filtered = all.filter((item) => item.id !== id);
-  saveBankQuestions(filtered, uniId);
+  saveBankQuestions(filtered, normId);
   // Also clean up from banned lists if deleted from bank
-  unbanQuestion(id, uniId, q?.text);
+  unbanQuestion(id, normId, q?.text);
 }
 
 export function getBankStats(uniId: string, subject?: string): { total: number; unused: number } {
-  const all = getBankQuestions(uniId);
-  const used = getUsedIds(uniId);
-  const bannedQuestions = all.filter((q) => isQuestionBannedStore(uniId, q.id, q.text));
+  const normId = normalizeUniversityId(uniId);
+  const all = getBankQuestions(normId);
+  const used = getUsedIds(normId);
 
   const filtered = subject ? all.filter((q) => q.subject === subject) : all;
 
-  // Only count questions that are NOT banned and NOT similar to banned
-  const available = filtered.filter((q) => {
-    if (isQuestionBannedStore(uniId, q.id, q.text)) return false;
-    if (bannedQuestions.some((bq) => calculateSimilarity(q.text, bq.text) > 0.65)) return false;
-    return true;
-  });
+  // Available questions in bank (not manually blocked)
+  const available = filtered.filter((q) => !isQuestionBannedStore(normId, q.id, q.text));
 
   const allowRepeated = typeof window !== "undefined" && localStorage.getItem("kt-allow-repeated") === "true";
-  const unused = available.filter((q) => !used.has(q.id) && (allowRepeated || !isQuestionInPastQuizzes(q, uniId))).length;
+  const unused = available.filter((q) => !used.has(q.id) && (allowRepeated || !isQuestionInPastQuizzes(q, normId))).length;
   return { total: available.length, unused };
 }

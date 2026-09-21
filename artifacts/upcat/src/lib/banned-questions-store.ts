@@ -18,7 +18,18 @@ export function normalizeTextHash(text: string): string {
     .trim();
 }
 
-const getLocalStoreKey = (uniId: string) => `kolehiyotrack_banned_store_${uniId}`;
+export function normalizeUniversityId(rawUni?: string): string {
+  if (!rawUni) return "upcat";
+  const u = rawUni.toLowerCase().trim();
+  if (u.includes("acet") || u.includes("ateneo") || u.includes("admu")) return "ateneo";
+  if (u.includes("bucet") || u.includes("bicol") || u === "bu") return "bu";
+  if (u.includes("ustet") || u.includes("ust") || u.includes("tomas")) return "ust";
+  if (u.includes("dcat") || u.includes("dlsu") || u.includes("salle") || u.includes("lasalle")) return "dlsu";
+  if (u.includes("upcat") || u.includes("up") || u.includes("diliman")) return "upcat";
+  return u;
+}
+
+const getLocalStoreKey = (uniId: string) => `kolehiyotrack_banned_store_${normalizeUniversityId(uniId)}`;
 
 /**
  * Fetches the local banned questions (IDs and hashes) from LocalStorage.
@@ -60,7 +71,8 @@ export async function syncBannedStoreWithFirestore(uniId: string, user: User | n
   if (!currentUser) return localData;
 
   try {
-    const docRef = doc(db, "user_sessions", currentUser.uid, "universities", uniId, "banned", "store");
+    const normUni = normalizeUniversityId(uniId);
+    const docRef = doc(db, "user_sessions", currentUser.uid, "universities", normUni, "banned", "store");
     const snap = await getDoc(docRef);
 
     if (snap.exists()) {
@@ -112,7 +124,8 @@ export async function banQuestionStore(uniId: string, questionId: string, text: 
   const currentUser = user || auth.currentUser;
   if (currentUser) {
     try {
-      const docRef = doc(db, "user_sessions", currentUser.uid, "universities", uniId, "banned", "store");
+      const normUni = normalizeUniversityId(uniId);
+      const docRef = doc(db, "user_sessions", currentUser.uid, "universities", normUni, "banned", "store");
       await setDoc(docRef, {
         ids: arrayUnion(questionId),
         hashes: hash ? arrayUnion(hash) : [],
@@ -140,13 +153,31 @@ export async function unbanQuestionStore(uniId: string, questionId: string, text
   const currentUser = user || auth.currentUser;
   if (currentUser) {
     try {
-      const docRef = doc(db, "user_sessions", currentUser.uid, "universities", uniId, "banned", "store");
+      const normUni = normalizeUniversityId(uniId);
+      const docRef = doc(db, "user_sessions", currentUser.uid, "universities", normUni, "banned", "store");
       await setDoc(docRef, {
         ids: arrayRemove(questionId),
         hashes: hash ? arrayRemove(hash) : [],
       }, { merge: true });
     } catch (err) {
       console.warn("[BannedStore] Firestore unban write failed, removed locally:", err);
+    }
+  }
+}
+
+/**
+ * Clears/resets all banned questions for a university.
+ */
+export async function clearBannedStore(uniId: string, user?: User | null): Promise<void> {
+  saveLocalBannedStore(uniId, { ids: [], hashes: [] });
+  const currentUser = user || auth.currentUser;
+  if (currentUser) {
+    try {
+      const normUni = normalizeUniversityId(uniId);
+      const docRef = doc(db, "user_sessions", currentUser.uid, "universities", normUni, "banned", "store");
+      await setDoc(docRef, { ids: [], hashes: [] });
+    } catch (err) {
+      console.warn("[BannedStore] Firestore clear banned store failed:", err);
     }
   }
 }

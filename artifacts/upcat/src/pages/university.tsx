@@ -37,7 +37,9 @@ import {
   subscribeUserExamDates,
   saveSingleExamDate,
   calculateDaysRemaining,
-  formatCustomDateDisplay
+  formatCustomDateDisplay,
+  TRACKED_UNIVERSITIES,
+  getUniversityBrandColor
 } from "@/lib/userUniversities";
 
 // ─── Editable Number Input ────────────────────────────────────────────────────
@@ -1272,18 +1274,39 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
     return getDefaultItemCounts(params.id);
   }, [params.id]);
 
+  const getInitialItemCounts = (uniId: string) => {
+    const defaults = getDefaultItemCounts(uniId);
+    try {
+      const raw = localStorage.getItem(`kolehiyotrack_test_item_counts_${uniId.toLowerCase()}`);
+      if (raw) {
+        return { ...defaults, ...JSON.parse(raw) };
+      }
+    } catch (e) {}
+    return defaults;
+  };
+
   const [selectedSubjects, setSelectedSubjects] = useState<Record<string, boolean>>(() =>
     getAvailableSubjectsForUniversity(params.id).reduce((acc, s) => ({ ...acc, [s.id]: false }), {})
   );
   const [itemCounts, setItemCounts] = useState<Record<string, number>>(() =>
-    getDefaultItemCounts(params.id)
+    getInitialItemCounts(params.id)
   );
+
+  const handleItemCountChange = (subjectId: string, val: number) => {
+    setItemCounts((prev) => {
+      const next = { ...prev, [subjectId]: val };
+      try {
+        localStorage.setItem(`kolehiyotrack_test_item_counts_${params.id.toLowerCase()}`, JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+  };
 
   // Update when university changes
   useEffect(() => {
     const subjects = getAvailableSubjectsForUniversity(params.id);
     setSelectedSubjects(subjects.reduce((acc, s) => ({ ...acc, [s.id]: false }), {}));
-    setItemCounts(getDefaultItemCounts(params.id));
+    setItemCounts(getInitialItemCounts(params.id));
   }, [params.id]);
 
   const [showUpload, setShowUpload] = useState(false);
@@ -1391,6 +1414,15 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     refreshBankStats();
+    const handleUpdate = () => refreshBankStats();
+    window.addEventListener("banned_questions_updated", handleUpdate);
+    window.addEventListener("question_bank_updated", handleUpdate);
+    window.addEventListener("storage", handleUpdate);
+    return () => {
+      window.removeEventListener("banned_questions_updated", handleUpdate);
+      window.removeEventListener("question_bank_updated", handleUpdate);
+      window.removeEventListener("storage", handleUpdate);
+    };
   }, [refreshBankStats, bankTrigger]);
 
   const totalSeconds = useMemo(
@@ -1471,6 +1503,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
         open={showUpload}
         onClose={() => setShowUpload(false)}
         universityId={params.id}
+        testItemCounts={itemCounts}
         onQuestionsAdded={() => {
           refreshBankStats();
           if (user) {
@@ -1489,43 +1522,13 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
             />
             <div className="space-y-1.5 min-w-0 flex-1">
               <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground">
-                {params.id === 'upcat' 
-                  ? "University of the Philippines - (UPCAT 2028)" 
-                  : params.id === 'ateneo'
-                  ? "Ateneo de Manila University - (ACET 2027)"
-                  : params.id === 'dlsu'
-                  ? "De La Salle University - (DCAT 2027)"
-                  : params.id === 'ust'
-                  ? "University of Santo Tomas - (USTET 2027)"
-                  : params.id === 'bu' 
-                  ? "Bicol University - (BUCET 2027)" 
-                  : params.id === 'slsu'
-                  ? "Southern Luzon State University - (SLSU 2027)"
-                  : params.id === 'neust'
-                  ? "Nueva Ecija University of Science and Technology - (NEUST 2027)"
-                  : params.id === 'ucn'
-                  ? "University of Camarines Norte - (UCN 2027)"
-                  : params.id === 'jru'
-                  ? "Jose Rizal University - (JRU 2027)"
-                  : params.id === 'ssu'
-                  ? "Sorsogon State University - (SSU 2027)"
-                  : "Mock Test Configuration"}
+                {TRACKED_UNIVERSITIES.find((u) => u.id === params.id)?.name || "Mock Test Configuration"}
               </h1>
               {(() => {
                 const customDate = userExamDates[params.id];
                 const displayDate = formatCustomDateDisplay(customDate, params.id);
                 const daysRemaining = calculateDaysRemaining(customDate, params.id);
-                const brandColorClass = 
-                  params.id === 'upcat' ? 'text-primary' :
-                  params.id === 'ateneo' ? 'text-[#003366]' :
-                  params.id === 'dlsu' ? 'text-[#00703c]' :
-                  params.id === 'ust' ? 'text-amber-500 dark:text-amber-400' :
-                  params.id === 'bu' ? 'text-[#009cb8]' :
-                  params.id === 'slsu' ? 'text-[#15803d]' :
-                  params.id === 'neust' ? 'text-[#1e40af]' :
-                  params.id === 'ucn' ? 'text-[#0f766e]' :
-                  params.id === 'jru' ? 'text-[#9a3412]' :
-                  params.id === 'ssu' ? 'text-[#4338ca]' : 'text-primary';
+                const brandColorClass = getUniversityBrandColor(params.id);
 
                 return (
                   <div className="flex flex-wrap items-center gap-2.5 pt-1">
@@ -1745,12 +1748,7 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
                             className="w-16 text-center"
                             disabled={!isSelected}
                             value={itemCounts[subject.id]}
-                            onChange={(val) =>
-                              setItemCounts((prev) => ({
-                                ...prev,
-                                [subject.id]: val,
-                              }))
-                            }
+                            onChange={(val) => handleItemCountChange(subject.id, val)}
                           />
                           <span className="text-sm text-muted-foreground w-10">items</span>
                         </div>
@@ -1915,18 +1913,9 @@ export default function UniversityPage({ params }: { params: { id: string } }) {
         open={showDateDialog}
         onOpenChange={setShowDateDialog}
         universityId={params.id}
-        universityName={
-          params.id === 'upcat' ? "University of the Philippines - (UPCAT 2028)" :
-          params.id === 'ateneo' ? "Ateneo de Manila University - (ACET 2027)" :
-          params.id === 'dlsu' ? "De La Salle University - (DCAT 2027)" :
-          params.id === 'bu' ? "Bicol University - (BUCET 2027)" : "Entrance Exam"
-        }
+        universityName={TRACKED_UNIVERSITIES.find((u) => u.id === params.id)?.name || "Entrance Exam"}
         currentDate={userExamDates[params.id] || ""}
-        defaultDate={
-          params.id === 'ateneo' ? 'Sept 19 – 27, 2026' :
-          params.id === 'dlsu' ? 'Sept 5 – Dec 6, 2026' :
-          params.id === 'bu' ? 'Aug 20 – Dec 6, 2026' : 'TBA'
-        }
+        defaultDate={TRACKED_UNIVERSITIES.find((u) => u.id === params.id)?.date || "TBA"}
         onSaveDate={async (newDateStr) => {
           await saveSingleExamDate(user, params.id, newDateStr);
         }}

@@ -23,6 +23,8 @@ import {
   saveUserCalendarFilters,
   DEFAULT_CALENDAR_FILTERS,
   CalendarFilters,
+  TRACKED_UNIVERSITIES,
+  getUniversityBrandColor,
 } from "@/lib/userUniversities";
 import { listSessions } from "@/lib/firestoreSessions";
 import { getLocalMistakes } from "@/lib/mistakeDiary";
@@ -40,43 +42,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const UNIVERSITIES = [
-  { 
-    id: 'upcat', 
-    name: 'University of the Philippines - (UPCAT 2028)', 
-    date: 'TBA',
-    applyUrl: 'https://upcat.up.edu.ph/',
-    description: ''
-  },
-  {
-    id: 'ateneo',
-    name: 'Ateneo de Manila University - (ACET 2027)',
-    date: 'Sept 19 – 27, 2026',
-    applyUrl: 'https://ateneo.admissions.ph/',
-    description: ''
-  },
-  {
-    id: 'dlsu',
-    name: 'De La Salle University - (DCAT 2027)',
-    date: 'Sept 5 – Dec 6, 2026',
-    applyUrl: 'https://applyarchershub.dlsu.edu.ph/ApplicationLandingPage/index/DLSU',
-    description: ''
-  },
-  {
-    id: 'ust',
-    name: 'University of Santo Tomas - (USTET 2027)',
-    date: 'Oct 3, 2026 – Jan 31, 2027',
-    applyUrl: 'https://ustet.ust.edu.ph/',
-    description: ''
-  },
-  {
-    id: 'bu',
-    name: 'Bicol University - (BUCET 2027)',
-    date: 'Aug 20 – Dec 6, 2026',
-    applyUrl: 'https://ibu.bicol-u.edu.ph/',
-    description: ''
-  }
-];
+const UNIVERSITIES = TRACKED_UNIVERSITIES;
 
 export default function Dashboard() {
   const { toast } = useToast();
@@ -653,12 +619,7 @@ export default function Dashboard() {
                     const customDate = userExamDates[uni.id];
                     const displayDate = customDate ? formatCustomDateDisplay(customDate, uni.id) : (uni.date || "TBA");
                     const daysRemaining = calculateDaysRemaining(customDate, uni.id);
-                    const brandColorClass = 
-                      uni.id === 'upcat' ? 'text-primary' :
-                      uni.id === 'ateneo' ? 'text-[#003366]' :
-                      uni.id === 'dlsu' ? 'text-[#00703c]' :
-                      uni.id === 'ust' ? 'text-amber-500 dark:text-amber-400' :
-                      uni.id === 'bu' ? 'text-[#009cb8]' : 'text-primary';
+                    const brandColorClass = getUniversityBrandColor(uni.id);
 
                     return (
                       <Card key={uni.id} className="overflow-hidden border transition-all duration-300 hover:border-primary/50 hover:shadow-md hover:-translate-y-0.5 group">
@@ -984,6 +945,7 @@ export default function Dashboard() {
                             <option value="Region V">Region V (Bicol)</option>
                             <option value="Region VII">Region VII (Central Visayas)</option>
                             <option value="Region VIII">Region VIII (Eastern Visayas)</option>
+                            <option value="Region XI">Region XI (Davao Region)</option>
                           </select>
                         </div>
 
